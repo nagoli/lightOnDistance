@@ -37,6 +37,9 @@ const consumptionInput = $('#consumption');
 const fuelPriceInput = $('#fuel-price');
 const chartView = $('#chart-view');
 const tableView = $('#table-view');
+const copyResultsBtn = $('#copy-results');
+const resultsSection = $('#results-section');
+const placesRecap = $('#places-recap');
 
 let hasResults = false;
 
@@ -67,6 +70,8 @@ function invalidateMatrix() {
   tableView.hidden = true;
   statsPanel.hidden = true;
   errorsPanel.hidden = true;
+  placesRecap.hidden = true;
+  copyResultsBtn.disabled = true;
   hideStatus();
   persist();
 }
@@ -206,6 +211,18 @@ function formatComputeError(err) {
 }
 
 // ---- Results rendering ----
+function renderPlacesRecap() {
+  const places = state.places.filter((pl) => (Number(pl.quantite) > 0) && (pl.codePostal || pl.ville));
+  if (!places.length) { placesRecap.hidden = true; return; }
+  placesRecap.hidden = false;
+  const chips = places.map((pl) => {
+    const name = escapeHtml(pl.ville || pl.codePostal);
+    const cp = pl.ville && pl.codePostal ? `<span class="recap-cp">${escapeHtml(pl.codePostal)}</span>` : '';
+    return `<span class="recap-chip">${cp}<span class="recap-name">${name}</span><span class="recap-qty">×${Number(pl.quantite)}</span></span>`;
+  }).join('');
+  placesRecap.innerHTML = `<span class="recap-label">Lieux</span><div class="recap-chips">${chips}</div>`;
+}
+
 function renderResults(rows, errors) {
   resultsBody.innerHTML = '';
   hasResults = rows.length > 0;
@@ -213,7 +230,9 @@ function renderResults(rows, errors) {
     statsPanel.hidden = true;
     chartView.hidden = true;
     tableView.hidden = true;
+    placesRecap.hidden = true;
   } else {
+    renderPlacesRecap();
     rows.forEach((r) => {
       const tr = document.createElement('tr');
       if (r.isOutlier) tr.classList.add('outlier');
@@ -324,6 +343,7 @@ function applyState(data) {
     tableView.hidden = true;
     statsPanel.hidden = true;
     errorsPanel.hidden = true;
+    placesRecap.hidden = true;
   }
 }
 
