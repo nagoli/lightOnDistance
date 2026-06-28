@@ -138,6 +138,37 @@ export function computeRanking(people, places, matrix, params, sortBy = 'km') {
   return { rows, stats, errors };
 }
 
+/** Row field backing each metric. */
+export const METRIC_FIELD = { km: 'km', time: 'timeSeconds', cost: 'cost' };
+
+/**
+ * Dispersion statistics for a given metric (km / time / cost) over the ranked rows.
+ * Returns min/max/median/mean/std/q1/q3/iqr/outlierThreshold and maxOverMedian.
+ */
+export function metricStats(rows, metric = 'km') {
+  const field = METRIC_FIELD[metric] || 'km';
+  const values = rows.map((r) => r[field]);
+  if (!values.length) return null;
+  const q1 = quantile(values, 0.25);
+  const q3 = quantile(values, 0.75);
+  const med = median(values);
+  const iqr = q3 - q1;
+  const max = Math.max(...values);
+  return {
+    count: values.length,
+    min: Math.min(...values),
+    max,
+    median: med,
+    mean: mean(values),
+    std: stdDev(values),
+    q1,
+    q3,
+    iqr,
+    outlierThreshold: q3 + 1.5 * iqr,
+    maxOverMedian: med > 0 ? max / med : 0,
+  };
+}
+
 /** Format seconds as "Xh Ymin". */
 export function formatDuration(seconds) {
   const totalMin = Math.round(seconds / 60);

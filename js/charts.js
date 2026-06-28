@@ -1,17 +1,18 @@
 // SVG charts (no dependency, responsive). Renders a ranking bar chart and a
 // distribution (box + dot strip) chart, with statistics annotations baked in.
 
-import { formatDuration, mean, median, quantile } from './compute.js';
+import { formatDuration, mean, median, metricStats } from './compute.js';
 
 // ---- Pure helpers (tested) ----
 
-/** Round a value up to a "nice" axis maximum (1, 2, 2.5, 5, 10 × 10^k). */
+/** Round a value up to a "nice" axis maximum, with fairly fine steps to limit empty space. */
 export function niceMax(v) {
   if (!isFinite(v) || v <= 0) return 1;
   const exp = Math.floor(Math.log10(v));
   const base = 10 ** exp;
   const f = v / base;
-  const nice = f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10;
+  const steps = [1, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10];
+  const nice = steps.find((s) => f <= s + 1e-9) ?? 10;
   return nice * base;
 }
 
@@ -26,15 +27,39 @@ export function ticks(max, count = 4) {
   return Array.from({ length: count + 1 }, (_, i) => (max / count) * i);
 }
 
+/** Round axis ticks from 0 to max using a "nice" step (~max/5). */
+export function niceTicks(max, targetCount = 5) {
+  if (!isFinite(max) || max <= 0) return [0];
+  const raw = max / targetCount;
+  const exp = Math.floor(Math.log10(raw));
+  const base = 10 ** exp;
+  const f = raw / base;
+  const step = (f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10) * base;
+  const out = [];
+  for (let t = 0; t <= max + 1e-6; t += step) out.push(Math.round(t * 1e6) / 1e6);
+  return out;
+}
+
 // ---- Metric configuration ----
 
 const METRICS = {
-  km: { label: 'kilomètres', unit: 'km', get: (r) => r.km, mult: (r) => r.multKm, fmt: fmtNum },
-  time: { label: 'temps', unit: '', get: (r) => r.timeSeconds, mult: (r) => r.multTime, fmt: formatDuration },
-  cost: { label: 'coût', unit: '€', get: (r) => r.cost, mult: (r) => r.multCost, fmt: fmtNum },
+  km: {
+    label: 'kilomètres', unit: 'km', caption: 'des kilomètres', axisTitle: 'kilomètres parcourus',
+    get: (r) => r.km, mult: (r) => r.multKm, fmt: fmtNum,
+  },
+  time: {
+    label: 'temps', unit: '', caption: 'du temps', axisTitle: 'temps de trajet',
+    get: (r) => r.timeSeconds, mult: (r) => r.multTime, fmt: formatDuration,
+  },
+  cost: {
+    label: 'coût', unit: '€', caption: 'du coût', axisTitle: 'coût (€)',
+    get: (r) => r.cost, mult: (r) => r.multCost, fmt: fmtNum,
+  },
 };
 
 function fmtNum(v) { return Math.round(v).toLocaleString('fr-FR'); }
+/** Format a stat value for the metric, appending its unit (km/€; time has none). */
+function fmtStat(m, v) { return m.fmt(v) + (m.unit ? ' ' + m.unit : ''); }
 function esc(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => (
     { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
@@ -44,15 +69,16 @@ function esc(s) {
 // ---- Public API ----
 
 /** Render both charts into `container`. */
-export function renderCharts(container, rows, stats, metric = 'km') {
+export function renderCharts(container, rows, metric = 'km') {
+  const m = METRICS[metric] || METRICS.km;
   container.innerHTML =
     `<figure class="chart">
-      <figcaption>Classement par ${METRICS[metric]?.label || 'kilomètres'}</figcaption>
+      <figcaption>Classement par ${m.label}</figcaption>
       ${rankingChart(rows, metric)}
     </figure>
     <figure class="chart">
-      <figcaption>Répartition des kilomètres &mdash; qui sort du lot&nbsp;?</figcaption>
-      ${distributionChart(rows, stats)}
+      <figcaption>Répartition ${m.caption} &mdash; qui sort du lot&nbsp;?</figcaption>
+      ${distributionChart(rows, metric)}
     </figure>`;
 }
 
@@ -112,57 +138,59 @@ function rankingChart(rows, metric) {
      <text x="${leftPad}" y="46" class="ch-sub">barres ambrées = personnes qui sortent du lot</text>`);
 }
 
-// ---- Distribution chart (box plot + dot strip) on km ----
+// ---- Distribution chart (box plot + dot strip) on the selected metric ----
 
-function distributionChart(rows) {
-  const values = rows.map((r) => r.km).sort((a, b) => a - b);
+function distributionChart(rows, metric) {
+  const m = METRICS[metric] || METRICS.km;
+  const values = rows.map(m.get).sort((a, b) => a - b);
   const n = values.length;
   const maxV = niceMax(values[n - 1] || 1);
 
-  const q1 = quantile(values, 0.25);
-  const q3 = quantile(values, 0.75);
-  const med = median(values);
-  const mn = mean(values);
-  const iqr = q3 - q1;
-  const sd = stdLocal(values, mn);
+  const s = metricStats(rows, metric);
+  const q1 = s.q1;
+  const q3 = s.q3;
+  const med = s.median;
+  const mn = s.mean;
+  const iqr = s.iqr;
+  const sd = s.std;
   const lowFence = q1 - 1.5 * iqr;
-  const highFence = q3 + 1.5 * iqr;
+  const highFence = s.outlierThreshold;
   const inFence = values.filter((v) => v >= lowFence && v <= highFence);
   const whiskLow = inFence.length ? inFence[0] : values[0];
   const whiskHigh = inFence.length ? inFence[inFence.length - 1] : values[n - 1];
 
   const W = 760;
-  const H = 250;
-  const left = 16;
-  const right = 18;
-  const top = 86;
+  const H = 268;
+  const left = 28;
+  const right = 28;
   const plotW = W - left - right;
   const x = linearScale(0, maxV, left, left + plotW);
 
-  const axisY = 196;
-  const boxTop = 132;
-  const boxBot = 176;
+  // vertical layout
+  const dotTop = 74;
+  const dotBot = 128;
+  const boxTop = 150;
+  const boxBot = 198;
   const boxMid = (boxTop + boxBot) / 2;
-  const dotBandTop = 96;
-  const dotBandBot = 126;
+  const axisY = 218;
 
-  // axis
+  // axis with nice round ticks + centered axis title
   const axis = `<line x1="${left}" y1="${axisY}" x2="${left + plotW}" y2="${axisY}" class="ax-line" />` +
-    ticks(maxV, 5).map((t) => {
+    niceTicks(maxV).map((t) => {
       const gx = x(t).toFixed(1);
       return `<line x1="${gx}" y1="${axisY}" x2="${gx}" y2="${axisY + 5}" class="ax-line" />
-              <text x="${gx}" y="${axisY + 18}" class="ax-tick" text-anchor="middle">${fmtNum(t)}</text>`;
+              <text x="${gx}" y="${axisY + 18}" class="ax-tick" text-anchor="middle">${m.fmt(t)}</text>`;
     }).join('') +
-    `<text x="${left + plotW}" y="${axisY + 18}" class="ax-tick" text-anchor="end" dy="0">km →</text>`;
+    `<text x="${(left + plotW / 2).toFixed(1)}" y="${axisY + 38}" class="ax-title" text-anchor="middle">${m.axisTitle}</text>`;
 
-  // mean ± std band
+  // mean ± std band (behind dots + box)
   const stdBand = sd > 0
-    ? `<rect x="${x(Math.max(0, mn - sd)).toFixed(1)}" y="${dotBandTop - 4}"
-            width="${(x(mn + sd) - x(Math.max(0, mn - sd))).toFixed(1)}" height="${(boxBot - dotBandTop + 8).toFixed(1)}"
-            class="std-band" />`
+    ? `<rect x="${x(Math.max(0, mn - sd)).toFixed(1)}" y="${dotTop - 6}"
+            width="${(x(mn + sd) - x(Math.max(0, mn - sd))).toFixed(1)}" height="${(boxBot - dotTop + 12).toFixed(1)}"
+            rx="4" class="std-band" />`
     : '';
 
-  // whiskers + box
+  // box plot
   const box = `
     <line x1="${x(whiskLow).toFixed(1)}" y1="${boxMid}" x2="${x(q1).toFixed(1)}" y2="${boxMid}" class="whisker" />
     <line x1="${x(whiskHigh).toFixed(1)}" y1="${boxMid}" x2="${x(q3).toFixed(1)}" y2="${boxMid}" class="whisker" />
@@ -172,45 +200,52 @@ function distributionChart(rows) {
     <line x1="${x(med).toFixed(1)}" y1="${boxTop}" x2="${x(med).toFixed(1)}" y2="${boxBot}" class="median-line" />
     <line x1="${x(mn).toFixed(1)}" y1="${boxTop - 6}" x2="${x(mn).toFixed(1)}" y2="${boxBot + 6}" class="mean-line" />`;
 
-  // dots (one per person), with outlier labels
-  const dots = rows.map((r, i) => {
-    const v = r.km;
-    const cx = x(v).toFixed(1);
-    const cy = (dotBandTop + ((i * 37) % Math.max(1, dotBandBot - dotBandTop))).toFixed(1);
+  // one marker per person: bubble + initials, full name shown on hover (<title>)
+  const bandH = Math.max(1, dotBot - dotTop);
+  const marks = rows.map((r, i) => {
+    const v = m.get(r);
     const out = v > highFence || v < lowFence;
-    const label = out
-      ? `<text x="${cx}" y="${(+cy - 9).toFixed(1)}" class="dot-label" text-anchor="middle">${esc(r.person.nom)}</text>`
-      : '';
-    return `<circle cx="${cx}" cy="${cy}" r="${out ? 6 : 4.5}" class="${out ? 'dot dot-outlier' : 'dot'}" />${label}`;
+    const cx = x(v).toFixed(1);
+    const cy = (dotTop + ((i * 37) % bandH)).toFixed(1);
+    const name = r.person.nom || '(?)';
+    const tip = `${name} · ${fmtStat(m, v)}`;
+    return `<g class="dot-mark">
+      <title>${esc(tip)}</title>
+      <circle cx="${cx}" cy="${cy}" r="${out ? 11 : 10}" class="${out ? 'dot dot-outlier' : 'dot'}" />
+      <text x="${cx}" y="${cy}" class="dot-initials${out ? ' dot-initials-out' : ''}" text-anchor="middle">${esc(initials(name))}</text>
+    </g>`;
   }).join('');
 
   const legend = statChips([
-    ['Médiane', fmtNum(med) + ' km'],
-    ['Moyenne', fmtNum(mn) + ' km'],
-    ['Écart-type', fmtNum(sd) + ' km'],
-    ['IQR', fmtNum(iqr) + ' km'],
-    ['Seuil outlier', fmtNum(highFence) + ' km'],
-  ], left, 22);
+    ['Médiane', fmtStat(m, med)],
+    ['Moyenne', fmtStat(m, mn)],
+    ['Écart-type', fmtStat(m, sd)],
+    ['IQR', fmtStat(m, iqr)],
+    ['Seuil outlier', fmtStat(m, highFence)],
+  ], left, plotW, 22);
 
-  return svg(W, H, legend + stdBand + axis + box + dots);
+  return svg(W, H, legend + stdBand + axis + box + marks);
 }
 
-function stdLocal(values, m) {
-  if (values.length < 2) return 0;
-  return Math.sqrt(values.reduce((a, v) => a + (v - m) ** 2, 0) / values.length);
+/** First two letters of a name, uppercased (e.g. "Marie-José" -> "MA"). */
+function initials(name) {
+  return String(name || '').trim().slice(0, 2).toUpperCase() || '?';
 }
 
-// chips of "label: value" laid out horizontally
-function statChips(pairs, startX, y) {
+// chips of "label : value", centered text, evenly spread across the available width
+function statChips(pairs, startX, totalW, y) {
+  const widths = pairs.map(([label, value]) => Math.round(`${label} : ${value}`.length * 6.4) + 24);
+  const sum = widths.reduce((a, b) => a + b, 0);
+  const gap = pairs.length > 1 ? Math.max(8, (totalW - sum) / (pairs.length - 1)) : 0;
   let cx = startX;
-  return pairs.map(([label, value]) => {
+  return pairs.map(([label, value], i) => {
     const text = `${label} : ${value}`;
-    const w = 16 + text.length * 6.4;
-    const chip = `<g class="chip">
-      <rect x="${cx.toFixed(1)}" y="${y - 13}" width="${w.toFixed(1)}" height="20" rx="10" class="chip-bg" />
-      <text x="${(cx + 9).toFixed(1)}" y="${y + 1}" class="chip-text">${text}</text>
+    const w = widths[i];
+    const chip = `<g>
+      <rect x="${cx.toFixed(1)}" y="${y - 12}" width="${w}" height="24" rx="12" class="chip-bg" />
+      <text x="${(cx + w / 2).toFixed(1)}" y="${y}" class="chip-text" text-anchor="middle">${text}</text>
     </g>`;
-    cx += w + 8;
+    cx += w + gap;
     return chip;
   }).join('');
 }

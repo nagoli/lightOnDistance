@@ -1,4 +1,4 @@
-import { computeRanking, formatDuration } from './compute.js';
+import { computeRanking, formatDuration, metricStats } from './compute.js';
 import { buildDistanceMatrix, RoutingError } from './routing.js';
 import { renderCharts } from './charts.js';
 import {
@@ -35,11 +35,9 @@ const errorsPanel = $('#errors-panel');
 const apiKeyInput = $('#api-key');
 const consumptionInput = $('#consumption');
 const fuelPriceInput = $('#fuel-price');
-const resultsTabs = $('#results-tabs');
 const chartView = $('#chart-view');
 const tableView = $('#table-view');
 
-let activeView = 'chart'; // 'chart' | 'table'
 let hasResults = false;
 
 // Persistent cache of OpenRouteService responses (geocoding + legs), survives reloads.
@@ -65,7 +63,6 @@ function persist() {
 function invalidateMatrix() {
   state.matrix = null;
   hasResults = false;
-  resultsTabs.hidden = true;
   chartView.hidden = true;
   tableView.hidden = true;
   statsPanel.hidden = true;
@@ -83,8 +80,8 @@ function recomputeFromCache() {
     consumption: parseFloat(consumptionInput.value) || 0,
     fuelPrice: parseFloat(fuelPriceInput.value) || 0,
   };
-  const { rows, stats, errors } = computeRanking(people, places, state.matrix, params, $('#sort-by').value);
-  renderResults(rows, stats, errors);
+  const { rows, errors } = computeRanking(people, places, state.matrix, params, $('#sort-by').value);
+  renderResults(rows, errors);
 }
 
 // ---- People table ----
@@ -176,8 +173,8 @@ async function onCompute() {
     saveOrsCacheStore(orsCache.data); // persist reusable ORS responses
 
     state.matrix = matrix; // cache so the session can be reloaded without recomputing
-    const { rows, stats, errors } = computeRanking(people, places, matrix, { consumption, fuelPrice }, sortBy);
-    renderResults(rows, stats, errors);
+    const { rows, errors } = computeRanking(people, places, matrix, { consumption, fuelPrice }, sortBy);
+    renderResults(rows, errors);
     persist();
     hideStatus();
   } catch (err) {
@@ -209,12 +206,11 @@ function formatComputeError(err) {
 }
 
 // ---- Results rendering ----
-function renderResults(rows, stats, errors) {
+function renderResults(rows, errors) {
   resultsBody.innerHTML = '';
   hasResults = rows.length > 0;
   if (!hasResults) {
     statsPanel.hidden = true;
-    resultsTabs.hidden = true;
     chartView.hidden = true;
     tableView.hidden = true;
   } else {
@@ -232,33 +228,36 @@ function renderResults(rows, stats, errors) {
         <td class="mult">×${r.multCost.toFixed(2)}</td>`;
       resultsBody.appendChild(tr);
     });
-    renderStats(stats);
-    renderCharts(chartView, rows, stats, $('#sort-by').value);
-    resultsTabs.hidden = false;
-    applyView();
+    const metric = $('#sort-by').value;
+    const stats = metricStats(rows, metric);
+    renderStats(stats, metric);
+    renderCharts(chartView, rows, metric);
+    chartView.hidden = false;
+    tableView.hidden = false;
   }
   renderErrors(errors);
 }
 
-/** Show the active view (chart or table); a no-op if there are no results. */
-function applyView() {
-  if (!hasResults) return;
-  chartView.hidden = activeView !== 'chart';
-  tableView.hidden = activeView !== 'table';
-  $('#tab-chart').classList.toggle('active', activeView === 'chart');
-  $('#tab-table').classList.toggle('active', activeView === 'table');
-}
+// Metric → {label, unit, fmt} for the stat cards.
+const STAT_METRIC = {
+  km: { label: 'km', unit: 'km', fmt: (v) => v.toFixed(0) },
+  time: { label: 'temps', unit: '', fmt: (v) => formatDuration(v) },
+  cost: { label: 'coût', unit: '€', fmt: (v) => v.toFixed(2) },
+};
 
-function renderStats(stats) {
+function renderStats(stats, metric) {
   statsPanel.hidden = false;
+  const m = STAT_METRIC[metric] || STAT_METRIC.km;
+  const u = m.unit ? ' ' + m.unit : '';
+  const f = (v) => m.fmt(v) + u;
   const cards = [
     ['Personnes classées', stats.count],
-    ['Médiane (km)', stats.medianKm.toFixed(0)],
-    ['Moyenne (km)', stats.meanKm.toFixed(0)],
-    ['Min (km)', stats.minKm.toFixed(0)],
-    ['Max (km)', stats.maxKm.toFixed(0)],
-    ['Écart-type (km)', stats.stdKm.toFixed(0)],
-    ['Écart interquartile (km)', stats.iqrKm.toFixed(0)],
+    [`Médiane (${m.label})`, f(stats.median)],
+    [`Moyenne (${m.label})`, f(stats.mean)],
+    [`Min (${m.label})`, f(stats.min)],
+    [`Max (${m.label})`, f(stats.max)],
+    [`Écart-type (${m.label})`, f(stats.std)],
+    [`Écart interquartile (${m.label})`, f(stats.iqr)],
     ['Max / médiane', '×' + stats.maxOverMedian.toFixed(2)],
   ];
   statsPanel.innerHTML = cards.map(([label, value]) => `
@@ -317,7 +316,6 @@ function applyState(data) {
     recomputeFromCache(); // restore the palmarès without calling the routing service
   } else {
     hasResults = false;
-    resultsTabs.hidden = true;
     chartView.hidden = true;
     tableView.hidden = true;
     statsPanel.hidden = true;
@@ -343,11 +341,6 @@ function init() {
   [consumptionInput, fuelPriceInput].forEach((el) =>
     el.addEventListener('input', () => { persist(); recomputeFromCache(); }));
   $('#sort-by').addEventListener('change', recomputeFromCache);
-
-  resultsTabs.addEventListener('click', (e) => {
-    const view = e.target.closest('.tab')?.dataset.view;
-    if (view) { activeView = view; applyView(); }
-  });
 
   $('#import-csv-btn').addEventListener('click', () => $('#import-csv').click());
   $('#import-csv').addEventListener('change', (e) => e.target.files[0] && onImportCsv(e.target.files[0]));

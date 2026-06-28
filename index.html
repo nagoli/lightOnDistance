@@ -36,7 +36,7 @@
         <button id="import-json-btn">Importer la session</button>
         <input type="file" id="import-json" accept=".json,application/json" hidden />
       </div>
-      <p class="hint">La session inclut les distances déjà calculées : la réimporter recharge le palmarès <strong>sans rappeler Google Maps</strong>.</p>
+      <p class="hint">La session inclut les distances déjà calculées : la réimporter recharge le palmarès <strong>sans rappeler OpenRouteService</strong>.</p>
     </section>
 
     <!-- 2. Personnes -->
@@ -101,12 +101,9 @@
       </div>
       <div id="status" class="status" hidden></div>
       <div id="stats-panel" hidden></div>
-      <div id="results-tabs" class="tabs" role="tablist" hidden>
-        <button class="tab active" id="tab-chart" data-view="chart" role="tab">Graphique</button>
-        <button class="tab" id="tab-table" data-view="table" role="tab">Tableau</button>
-      </div>
       <div id="chart-view" hidden></div>
       <div class="table-wrap" id="table-view" hidden>
+        <h3 class="table-title">Tableau détaillé</h3>
         <table id="results-table">
           <thead>
             <tr>

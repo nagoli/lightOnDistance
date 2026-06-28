@@ -23,9 +23,9 @@ Ou déposez les fichiers tels quels sur n'importe quel hébergement statique.
 3. **Lieux** : tableau pré-rempli, éditable ; chaque lieu a une quantité (défaut 1),
    un code postal et une ville.
 4. **Palmarès** : « Calculer le palmarès » géocode les adresses, interroge
-   OpenRouteService et affiche le classement + les statistiques. Deux onglets permettent
-   de basculer entre la **vue graphique** (barres classées + répartition box plot, avec
-   les stats intégrées) et la **vue tableau**.
+   OpenRouteService et affiche le classement + les statistiques : d'abord la **vue
+   graphique** (barres classées + répartition box plot, avec les stats intégrées), puis
+   le **tableau détaillé** juste en dessous.
 
 Les données sont **sauvegardées automatiquement** dans le navigateur (localStorage),
 y compris les distances déjà calculées : recharger la page restaure le palmarès sans

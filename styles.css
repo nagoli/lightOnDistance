@@ -172,36 +172,17 @@ tr.row-error td { color: var(--danger); }
 }
 #errors-panel ul { margin: 0.4rem 0 0; padding-left: 1.2rem; }
 
-/* ---- Tabs (Graphique / Tableau) ---- */
-.tabs {
-  display: inline-flex;
-  gap: 0.25rem;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 0.25rem;
-  margin: 0.5rem 0 1rem;
-}
-.tab {
-  border: none;
-  background: transparent;
-  border-radius: 6px;
-  padding: 0.4rem 1rem;
-  font-weight: 600;
-  color: var(--muted);
-}
-.tab:hover { background: #e9edf3; }
-.tab.active {
-  background: #fff;
-  color: var(--accent);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
-}
-
 /* ---- Charts ---- */
 #chart-view {
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
+  margin-bottom: 1.5rem;
+}
+.table-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin: 0 0 0.5rem;
 }
 .chart {
   margin: 0;
@@ -221,6 +202,7 @@ tr.row-error td { color: var(--danger); }
 .ch-title { font-size: 13px; font-weight: 700; fill: var(--text); }
 .ch-sub { font-size: 11px; fill: var(--muted); }
 .ax-tick { font-size: 11px; fill: var(--muted); }
+.ax-title { font-size: 11px; font-weight: 600; fill: var(--muted); }
 .ax-grid { stroke: #eef1f5; stroke-width: 1; }
 .ax-line { stroke: var(--border); stroke-width: 1; }
 
@@ -241,8 +223,16 @@ tr.row-error td { color: var(--danger); }
 .whisker { stroke: var(--muted); stroke-width: 1.5; }
 .whisker-cap { stroke: var(--muted); stroke-width: 1.5; }
 .std-band { fill: rgba(147, 51, 234, 0.07); }
-.dot { fill: var(--accent); fill-opacity: 0.7; }
-.dot-outlier { fill: #f59e0b; stroke: #b45309; stroke-width: 1; fill-opacity: 1; }
-.dot-label { font-size: 10px; font-weight: 600; fill: #b45309; }
+.dot-mark { cursor: default; }
+.dot { fill: var(--accent); fill-opacity: 0.85; stroke: #fff; stroke-width: 1.5; }
+.dot-outlier { fill: #f59e0b; stroke: #b45309; stroke-width: 1.5; fill-opacity: 1; }
+.dot-initials {
+  font-size: 9px;
+  font-weight: 700;
+  fill: #fff;
+  dominant-baseline: central;
+  pointer-events: none;
+}
+.dot-initials-out { fill: #422006; }
 .chip-bg { fill: var(--bg); stroke: var(--border); stroke-width: 1; }
-.chip-text { font-size: 11px; fill: var(--text); dominant-baseline: middle; }
+.chip-text { font-size: 11px; fill: var(--text); dominant-baseline: central; }

@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   computeBreakSeconds, computePersonTotals, computeRanking,
-  formatDuration, mean, median, quantile, stdDev,
+  formatDuration, mean, median, quantile, stdDev, metricStats,
 } from '../js/compute.js';
 
 const params = { consumption: 6, fuelPrice: 2 };
@@ -108,4 +108,39 @@ test('formatDuration', () => {
   assert.equal(formatDuration(90), '2 min');
   assert.equal(formatDuration(3600), '1 h 00');
   assert.equal(formatDuration(72000), '20 h 00');
+});
+
+test('metricStats: dispersion stats for the chosen metric', () => {
+  const rows = [
+    { km: 200, timeSeconds: 3600, cost: 10 },
+    { km: 400, timeSeconds: 7200, cost: 20 },
+    { km: 600, timeSeconds: 10800, cost: 30 },
+  ];
+  const s = metricStats(rows, 'km');
+  assert.equal(s.count, 3);
+  assert.equal(s.min, 200);
+  assert.equal(s.max, 600);
+  assert.equal(s.median, 400);
+  assert.equal(s.mean, 400);
+  assert.ok(Math.abs(s.std - 163.2993) < 1e-3);
+  assert.equal(s.q1, 300);
+  assert.equal(s.q3, 500);
+  assert.equal(s.iqr, 200);
+  assert.equal(s.outlierThreshold, 800); // 500 + 1.5*200
+  assert.equal(s.maxOverMedian, 1.5);
+});
+
+test('metricStats: follows the metric (time)', () => {
+  const rows = [
+    { km: 200, timeSeconds: 3600, cost: 10 },
+    { km: 400, timeSeconds: 7200, cost: 20 },
+  ];
+  const s = metricStats(rows, 'time');
+  assert.equal(s.min, 3600);
+  assert.equal(s.max, 7200);
+  assert.equal(s.median, 5400);
+});
+
+test('metricStats: empty rows -> null', () => {
+  assert.equal(metricStats([], 'km'), null);
 });

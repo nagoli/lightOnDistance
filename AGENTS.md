@@ -82,7 +82,7 @@ Pour chaque personne, cumulé sur tous les lieux :
 | `js/routing.js` | Client **OpenRouteService** : géocodage + matrice de distances (`driving-car`, par lots) + gestion d'erreurs (`RoutingError`). |
 | `js/charts.js` | Graphiques **SVG** (zéro dépendance) : barres classées + répartition (box plot + points), avec annotations statistiques. Helpers purs `niceMax`/`linearScale`/`ticks` testés. |
 | `js/storage.js` | (Dé)sérialisation pure, persistance `localStorage`, import/export CSV & JSON. |
-| `js/app.js` | État de l'app, rendu des tableaux éditables, onglets Graphique/Tableau, branchement des événements, orchestration. |
+| `js/app.js` | État de l'app, rendu des tableaux éditables, rendu graphiques + tableau de résultats, branchement des événements, orchestration. |
 | `tests/*.test.mjs` | Tests unitaires (`node:test`). |
 
 ### Flux de données
@@ -90,17 +90,17 @@ Pour chaque personne, cumulé sur tous les lieux :
 2. Au clic « Calculer » : `routing.js#buildDistanceMatrix(apiKey, ...)` géocode puis interroge la
    matrice ORS → `matrix[personId][placeId] = {distanceM, durationS} | {error}`.
 3. `compute.js#computeRanking(...)` → `{ rows, stats, errors }` purement à partir de cette matrice.
-4. `app.js#renderResults()` affiche les **statistiques**, les **graphiques** (`charts.js`) et le
-   **tableau**, et les erreurs. Deux onglets basculent entre vue Graphique et vue Tableau
-   (`activeView` / `applyView()`), sans recalcul.
+4. `app.js#renderResults()` affiche les **statistiques**, les **graphiques** (`charts.js`),
+   puis le **tableau détaillé** (toujours visible, sous les graphiques) et les erreurs.
 
 ### Visualisation (`js/charts.js`)
 - **Graphique 1 — Classement** : barres horizontales triées selon la métrique active
   (`sort-by`), avec lignes de **médiane** et **moyenne**, et barres ambrées pour les outliers.
 - **Graphique 2 — Répartition (km)** : box plot (IQR, médiane, moustaches) + bande
-  **moyenne ± écart-type** + points par personne (outliers nommés au-dessus du seuil
-  `Q3 + 1,5·IQR`). Les valeurs stat (médiane, moyenne, écart-type, IQR, seuil) sont
-  affichées en « chips » dans le graphique.
+  **moyenne ± écart-type** + une bulle par personne. Chaque bulle porte les **2 initiales**
+  du nom (bleu = normal, ambre = outlier au-delà de `Q3 + 1,5·IQR`) et affiche le **nom
+  complet + km au survol** (élément SVG `<title>`). Les valeurs stat (médiane, moyenne,
+  écart-type, IQR, seuil) sont affichées en « chips » dans le graphique.
 - Tout est en SVG inline responsive (`viewBox`, `width:100%`), stylé via classes dans `styles.css`.
 - Le graphique de classement suit la métrique de tri ; la répartition reste sur les **km**
   (métrique de dispersion de référence, cohérente avec `stats`).
