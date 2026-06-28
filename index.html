@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>lightOnDistance — Palmarès des trajets</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header>
+    <h1>lightOnDistance</h1>
+    <p class="subtitle">Palmarès des kilomètres, du temps et du coût des trajets</p>
+  </header>
+
+  <main>
+    <!-- 1. Configuration -->
+    <section id="config-section">
+      <h2>1. Configuration</h2>
+      <div class="config-grid">
+        <label>
+          Clé API OpenRouteService
+          <input type="password" id="api-key" placeholder="Clé OpenRouteService" autocomplete="off" />
+        </label>
+        <label>
+          Consommation (L/100km)
+          <input type="number" id="consumption" value="6" min="0" step="0.1" />
+        </label>
+        <label>
+          Prix carburant (€/L)
+          <input type="number" id="fuel-price" value="2" min="0" step="0.01" />
+        </label>
+      </div>
+      <p class="hint">La clé API reste dans votre navigateur ; elle n'est utilisée que pour appeler OpenRouteService (géocodage + calcul des distances). Clé gratuite : <a href="https://openrouteservice.org/dev/#/signup" target="_blank" rel="noopener">openrouteservice.org</a>.</p>
+      <div class="toolbar">
+        <button id="export-json">Exporter la session</button>
+        <button id="import-json-btn">Importer la session</button>
+        <input type="file" id="import-json" accept=".json,application/json" hidden />
+      </div>
+      <p class="hint">La session inclut les distances déjà calculées : la réimporter recharge le palmarès <strong>sans rappeler Google Maps</strong>.</p>
+    </section>
+
+    <!-- 2. Personnes -->
+    <section id="people-section">
+      <h2>2. Personnes</h2>
+      <div class="toolbar">
+        <button id="add-person">+ Ajouter une personne</button>
+        <button id="import-csv-btn">Importer CSV</button>
+        <input type="file" id="import-csv" accept=".csv,text/csv" hidden />
+        <button id="export-csv">Exporter CSV</button>
+      </div>
+      <p class="hint">Format CSV : <code>nom,code_postal,ville</code> (séparateur <code>,</code> ou <code>;</code>).</p>
+      <div class="table-wrap">
+        <table id="people-table">
+          <thead>
+            <tr>
+              <th>Nom</th>
+              <th>Code postal</th>
+              <th>Ville</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 3. Lieux -->
+    <section id="places-section">
+      <h2>3. Lieux</h2>
+      <div class="toolbar">
+        <button id="add-place">+ Ajouter un lieu</button>
+      </div>
+      <div class="table-wrap">
+        <table id="places-table">
+          <thead>
+            <tr>
+              <th>Quantité</th>
+              <th>Code postal</th>
+              <th>Ville</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 4. Résultats -->
+    <section id="results-section">
+      <h2>4. Palmarès</h2>
+      <div class="toolbar">
+        <button id="compute" class="primary">Calculer le palmarès</button>
+        <label class="inline">
+          Trier par
+          <select id="sort-by">
+            <option value="km">Kilomètres</option>
+            <option value="time">Temps</option>
+            <option value="cost">Coût</option>
+          </select>
+        </label>
+      </div>
+      <div id="status" class="status" hidden></div>
+      <div id="stats-panel" hidden></div>
+      <div class="table-wrap">
+        <table id="results-table" hidden>
+          <thead>
+            <tr>
+              <th>Rang</th>
+              <th>Nom</th>
+              <th>Km</th>
+              <th>×</th>
+              <th>Temps</th>
+              <th>×</th>
+              <th>Coût (€)</th>
+              <th>×</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div id="errors-panel" hidden></div>
+    </section>
+  </main>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,11 @@
+{
+  "name": "lightondistance",
+  "version": "1.0.0",
+  "description": "Palmarès des trajets (km / temps / coût) — front-end pur, sans backend.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test",
+    "test:watch": "node --test --watch"
+  }
+}
