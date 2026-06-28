@@ -7,7 +7,6 @@
   --accent: #2563eb;
   --accent-hover: #1d4ed8;
   --danger: #dc2626;
-  --highlight: #fef3c7;
 }
 
 * { box-sizing: border-box; }
@@ -28,6 +27,12 @@ header {
 
 header h1 { margin: 0; font-size: 1.6rem; }
 .subtitle { margin: 0.25rem 0 0; color: var(--muted); }
+.intro-text {
+  max-width: 860px;
+  margin: 0.9rem 0 0;
+  color: var(--text);
+  font-size: 0.95rem;
+}
 
 main {
   max-width: 1000px;
@@ -185,7 +190,6 @@ td input.qty { width: 70px; }
 }
 
 .mult { color: var(--accent); font-weight: 600; }
-tr.outlier { background: var(--highlight); }
 tr.row-error td { color: var(--danger); }
 
 #places-recap {
@@ -225,11 +229,6 @@ tr.row-error td { color: var(--danger); }
   white-space: nowrap;
 }
 .recap-name { font-weight: 500; }
-.recap-cp {
-  color: var(--muted);
-  font-size: 0.72rem;
-  font-variant-numeric: tabular-nums;
-}
 .recap-qty {
   background: var(--accent);
   color: #fff;
@@ -282,10 +281,11 @@ tr.row-error td { color: var(--danger); }
 
 /* ranking bars */
 .bar { fill: var(--accent); }
-.bar-outlier { fill: #f59e0b; }
+.bar-label-bg { fill: var(--card); fill-opacity: 0.88; stroke: var(--card); stroke-opacity: 0.7; }
 .bar-name { font-size: 12px; fill: var(--text); }
-.bar-value { font-size: 11px; fill: var(--muted); dominant-baseline: middle; }
-.bar-value-sub { font-size: 10px; fill: var(--muted); }
+.bar-value { font-size: 11px; fill: var(--text); dominant-baseline: middle; }
+.bar-value-strong { font-weight: 800; }
+.bar-value-sub { font-size: 10px; fill: var(--text); }
 .ref-median { stroke: #0f766e; stroke-width: 1.5; stroke-dasharray: 5 3; }
 .ref-mean { stroke: #9333ea; stroke-width: 1.5; stroke-dasharray: 2 3; }
 .ref-label { font-size: 11px; font-weight: 600; fill: #0f766e; }
@@ -300,7 +300,6 @@ tr.row-error td { color: var(--danger); }
 .std-band { fill: rgba(147, 51, 234, 0.07); }
 .dot-mark { cursor: default; }
 .dot { fill: var(--accent); fill-opacity: 0.85; stroke: #fff; stroke-width: 1.5; }
-.dot-outlier { fill: #f59e0b; stroke: #b45309; stroke-width: 1.5; fill-opacity: 1; }
 .dot-initials {
   font-size: 9px;
   font-weight: 700;
@@ -308,6 +307,5 @@ tr.row-error td { color: var(--danger); }
   dominant-baseline: central;
   pointer-events: none;
 }
-.dot-initials-out { fill: #422006; }
 .chip-bg { fill: var(--bg); stroke: var(--border); stroke-width: 1; }
 .chip-text { font-size: 11px; fill: var(--text); dominant-baseline: central; }

@@ -2,6 +2,8 @@
 
 const BREAK_SECONDS = 30 * 60; // 30 min
 const DRIVE_BLOCK_SECONDS = 2 * 3600; // every 2h of driving
+const QUARTER_HOUR_MINUTES = 15;
+const DISPLAY_HOUR_THRESHOLD_SECONDS = 20 * 3600;
 
 /**
  * Break time added for a single one-way leg: 30 min for every full 2h of driving.
@@ -195,6 +197,37 @@ export function formatDuration(seconds) {
   const totalMin = Math.round(seconds / 60);
   const h = Math.floor(totalMin / 60);
   const m = totalMin % 60;
+  if (h === 0) return `${m} min`;
+  return `${h} h ${String(m).padStart(2, '0')}`;
+}
+
+/** Format seconds rounded up to the next 15-minute block. */
+export function formatDurationCeilQuarter(seconds, compact = false) {
+  const safeSeconds = Number.isFinite(Number(seconds)) ? Math.max(0, Number(seconds)) : 0;
+  const rawMinutes = safeSeconds / 60;
+  const totalMin = Math.ceil(rawMinutes / QUARTER_HOUR_MINUTES) * QUARTER_HOUR_MINUTES;
+  return formatDurationMinutes(totalMin, compact);
+}
+
+/** Display duration: ceil to 15 min up to 20h, then ceil to the next full hour. */
+export function formatDurationForDisplay(seconds, compact = false) {
+  const safeSeconds = Number.isFinite(Number(seconds)) ? Math.max(0, Number(seconds)) : 0;
+  const rawMinutes = safeSeconds / 60;
+  if (safeSeconds > DISPLAY_HOUR_THRESHOLD_SECONDS) {
+    const h = Math.ceil(rawMinutes / 60);
+    return compact ? `${h}h` : `${h} h`;
+  }
+  const totalMin = Math.ceil(rawMinutes / QUARTER_HOUR_MINUTES) * QUARTER_HOUR_MINUTES;
+  return formatDurationMinutes(totalMin, compact);
+}
+
+function formatDurationMinutes(totalMin, compact) {
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  if (compact) {
+    if (h === 0) return `${m}min`;
+    return `${h}h${String(m).padStart(2, '0')}`;
+  }
   if (h === 0) return `${m} min`;
   return `${h} h ${String(m).padStart(2, '0')}`;
 }

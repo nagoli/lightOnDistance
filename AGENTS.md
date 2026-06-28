@@ -63,8 +63,9 @@ Pour chaque personne, cumulé sur tous les lieux :
 - **×N** : pour chaque métrique (km, temps, coût), rapport de la valeur au **minimum**
   observé → la personne au minimum vaut **×1**.
 - **Statistiques (sur les km)** : médiane, moyenne, min, max, écart-type,
-  écart interquartile (IQR), max/médiane. Une personne est **outlier** (surlignée)
-  si `km > Q3 + 1,5 × IQR`.
+  écart interquartile (IQR = `Q3 − Q1`, la moitié centrale des valeurs),
+  max/médiane. Le seuil haut est `Q3 + 1,5 × IQR`, sans variation de couleur
+  dédiée pour les personnes au-delà du seuil.
 
 ### Hypothèses / points ouverts
 - L'aller-retour est estimé à **2× l'aller simple** (le trajet peut différer selon le sens).
@@ -95,12 +96,12 @@ Pour chaque personne, cumulé sur tous les lieux :
 
 ### Visualisation (`js/charts.js`)
 - **Graphique 1 — Classement** : barres horizontales triées selon la métrique active
-  (`sort-by`), avec lignes de **médiane** et **moyenne**, et barres ambrées pour les outliers.
+  (`sort-by`), avec lignes de **médiane** et **moyenne**.
 - **Graphique 2 — Répartition (km)** : box plot (IQR, médiane, moustaches) + bande
   **moyenne ± écart-type** + une bulle par personne. Chaque bulle porte les **2 initiales**
-  du nom (bleu = normal, ambre = outlier au-delà de `Q3 + 1,5·IQR`) et affiche le **nom
-  complet + km au survol** (élément SVG `<title>`). Les valeurs stat (médiane, moyenne,
-  écart-type, IQR, seuil) sont affichées en « chips » dans le graphique.
+  du nom et affiche le **nom complet + km au survol** (élément SVG `<title>`).
+  Les valeurs stat (médiane, moyenne, écart-type, IQR, seuil) sont affichées en
+  « chips » dans le graphique.
 - Tout est en SVG inline responsive (`viewBox`, `width:100%`), stylé via classes dans `styles.css`.
 - Le graphique de classement suit la métrique de tri ; la répartition reste sur les **km**
   (métrique de dispersion de référence, cohérente avec `stats`).

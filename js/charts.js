@@ -1,7 +1,7 @@
 // SVG charts (no dependency, responsive). Renders a ranking bar chart and a
 // distribution (box + dot strip) chart, with statistics annotations baked in.
 
-import { formatDuration, mean, median, metricStats } from './compute.js';
+import { formatDurationForDisplay, mean, median, metricStats } from './compute.js';
 
 // ---- Pure helpers (tested) ----
 
@@ -49,7 +49,7 @@ const METRICS = {
   },
   time: {
     label: 'temps', unit: '', caption: 'du temps', axisTitle: 'temps de trajet',
-    get: (r) => r.timeSeconds, mult: (r) => r.multTime, fmt: formatDuration,
+    get: (r) => r.timeSeconds, mult: (r) => r.multTime, fmt: formatDurationForDisplay,
   },
   cost: {
     label: 'coût', unit: '€', caption: 'du coût', axisTitle: 'coût (€)',
@@ -61,18 +61,16 @@ function fmtNum(v) { return Math.round(v).toLocaleString('fr-FR'); }
 /** Format a stat value for the metric, appending its unit (km/€; time has none). */
 function fmtStat(m, v) { return m.fmt(v) + (m.unit ? ' ' + m.unit : ''); }
 
-/** End-of-bar label, two lines: "1234 km ×1.50" then "12 h 30 · 250.00 €" (×N only on km). */
+/** End-of-bar label, two lines: "1234km - 12h30 - 250€" then "x1.50". */
 function barLabel(r) {
   const km = METRICS.km;
-  const line1 = `${km.fmt(km.get(r))} km ×${km.mult(r).toFixed(2)}`;
-  const line2 = ['time', 'cost']
-    .map((k) => {
-      const mm = METRICS[k];
-      const u = mm.unit ? ' ' + mm.unit : '';
-      return `${mm.fmt(mm.get(r))}${u}`;
-    })
-    .join(' · ');
-  return { line1, line2 };
+  const cost = METRICS.cost;
+  const kmText = `${km.fmt(km.get(r))}km`;
+  const timeText = formatDurationForDisplay(r.timeSeconds, true);
+  const costText = `${cost.fmt(cost.get(r))}€`;
+  const line1 = `${kmText} – ${timeText} – ${costText}`;
+  const line2 = `x${km.mult(r).toFixed(2)}`;
+  return { kmText, timeText, costText, line1, line2 };
 }
 function esc(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => (
@@ -91,7 +89,7 @@ export function renderCharts(container, rows, metric = 'km') {
       ${rankingChart(rows, metric)}
     </figure>
     <figure class="chart">
-      <figcaption>Répartition ${m.caption} &mdash; qui sort du lot&nbsp;?</figcaption>
+      <figcaption>Répartition ${m.caption} et dispersion</figcaption>
       ${distributionChart(rows, metric)}
     </figure>`;
 }
@@ -129,14 +127,19 @@ function rankingChart(rows, metric) {
     const v = m.get(r);
     const y = top + i * rowH + (rowH - 18) / 2;
     const w = Math.max(1, x(v) - leftPad);
-    const cls = r.isOutlier ? 'bar bar-outlier' : 'bar';
-    const { line1, line2 } = barLabel(r);
-    const lx = (x(v) + 8).toFixed(1);
+    const { kmText, timeText, costText, line1, line2 } = barLabel(r);
+    const lxRaw = x(v) + 8;
+    const lx = lxRaw.toFixed(1);
+    const labelW = Math.min(
+      W - lxRaw - 16,
+      Math.max(90, Math.round(Math.max(line1.length * 6.2, line2.length * 5.7) + 16)),
+    );
     return `<g>
       <text x="${leftPad - 10}" y="${y + 13}" class="bar-name" text-anchor="end">${i + 1}. ${esc(r.person.nom)}</text>
-      <rect x="${leftPad}" y="${y}" width="${w.toFixed(1)}" height="18" rx="4" class="${cls}" />
+      <rect x="${leftPad}" y="${y}" width="${w.toFixed(1)}" height="18" rx="4" class="bar" />
+      <rect x="${(lxRaw - 5).toFixed(1)}" y="${(y - 5).toFixed(1)}" width="${labelW}" height="35" rx="5" class="bar-label-bg" />
       <text x="${lx}" y="${y + 9}" class="bar-value">
-        <tspan x="${lx}" dy="0">${line1}</tspan>
+        <tspan x="${lx}" dy="0">${esc(kmText)} – </tspan><tspan class="bar-value-strong">${esc(timeText)}</tspan><tspan> – </tspan><tspan class="bar-value-strong">${esc(costText)}</tspan>
         <tspan x="${lx}" dy="14" class="bar-value-sub">${line2}</tspan>
       </text>
     </g>`;
@@ -145,15 +148,14 @@ function rankingChart(rows, metric) {
   const refLines = `
     <line x1="${x(med).toFixed(1)}" y1="${lineTop}" x2="${x(med).toFixed(1)}" y2="${lineBottom}" class="ref-median" />
     <line x1="${x(mn).toFixed(1)}" y1="${lineTop}" x2="${x(mn).toFixed(1)}" y2="${lineBottom}" class="ref-mean" />
-    <text x="${x(med).toFixed(1)}" y="${top - 40}" class="ref-label" text-anchor="middle">médiane ${m.fmt(med)}</text>
-    <text x="${x(mn).toFixed(1)}" y="${top - 24}" class="ref-label ref-label-mean" text-anchor="middle">moyenne ${m.fmt(mn)}</text>`;
+    <text x="${x(med).toFixed(1)}" y="${top - 40}" class="ref-label" text-anchor="middle">médiane ${fmtStat(m, med)}</text>
+    <text x="${x(mn).toFixed(1)}" y="${top - 24}" class="ref-label ref-label-mean" text-anchor="middle">moyenne ${fmtStat(m, mn)}</text>`;
 
   return svg(W, H,
     grid +
-    bars +
     refLines +
-    `<text x="${leftPad}" y="28" class="ch-title">${n} personne${n > 1 ? 's' : ''}</text>
-     <text x="${leftPad}" y="46" class="ch-sub">barres ambrées = personnes qui sortent du lot</text>`);
+    bars +
+    `<text x="${leftPad}" y="28" class="ch-title">${n} personne${n > 1 ? 's' : ''}</text>`);
 }
 
 // ---- Distribution chart (box plot + dot strip) on the selected metric ----
@@ -222,15 +224,14 @@ function distributionChart(rows, metric) {
   const bandH = Math.max(1, dotBot - dotTop);
   const marks = rows.map((r, i) => {
     const v = m.get(r);
-    const out = v > highFence || v < lowFence;
     const cx = x(v).toFixed(1);
     const cy = (dotTop + ((i * 37) % bandH)).toFixed(1);
     const name = r.person.nom || '(?)';
     const tip = `${name} · ${fmtStat(m, v)}`;
     return `<g class="dot-mark">
       <title>${esc(tip)}</title>
-      <circle cx="${cx}" cy="${cy}" r="${out ? 11 : 10}" class="${out ? 'dot dot-outlier' : 'dot'}" />
-      <text x="${cx}" y="${cy}" class="dot-initials${out ? ' dot-initials-out' : ''}" text-anchor="middle">${esc(initials(name))}</text>
+      <circle cx="${cx}" cy="${cy}" r="10" class="dot" />
+      <text x="${cx}" y="${cy}" class="dot-initials" text-anchor="middle">${esc(initials(name))}</text>
     </g>`;
   }).join('');
 
@@ -239,7 +240,7 @@ function distributionChart(rows, metric) {
     ['Moyenne', fmtStat(m, mn)],
     ['Écart-type', fmtStat(m, sd)],
     ['IQR', fmtStat(m, iqr)],
-    ['Seuil outlier', fmtStat(m, highFence)],
+    ['Seuil haut', fmtStat(m, highFence)],
   ], left, plotW, 22);
 
   return svg(W, H, legend + stdBand + axis + box + marks);

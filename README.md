@@ -61,8 +61,9 @@ Pour chaque personne, cumulé sur tous les lieux :
 - **Coût** = `km × (conso/100) × prix_litre`
 - **×N** : rapport de chaque métrique au minimum (la personne au minimum = ×1)
 
-**Statistiques (km)** : médiane, moyenne, min, max, écart-type, écart interquartile,
-max/médiane. Les personnes au-dessus de `Q3 + 1,5 × IQR` sont surlignées (qui sort du lot).
+**Statistiques (km)** : médiane, moyenne, min, max, écart-type, écart interquartile
+(IQR = `Q3 − Q1`, la moitié centrale des valeurs), max/médiane. Le seuil haut
+`Q3 + 1,5 × IQR` est calculé sans variation de couleur dédiée dans l'affichage.
 
 ## Hypothèses / à compléter
 

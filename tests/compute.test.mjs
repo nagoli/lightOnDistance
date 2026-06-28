@@ -2,7 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   computeBreakSeconds, computePersonTotals, computeRanking,
-  formatDuration, mean, median, quantile, stdDev, metricStats, gini,
+  formatDuration, formatDurationCeilQuarter, formatDurationForDisplay,
+  mean, median, quantile, stdDev, metricStats, gini,
 } from '../js/compute.js';
 
 const params = { consumption: 6, fuelPrice: 2 };
@@ -108,6 +109,22 @@ test('formatDuration', () => {
   assert.equal(formatDuration(90), '2 min');
   assert.equal(formatDuration(3600), '1 h 00');
   assert.equal(formatDuration(72000), '20 h 00');
+});
+
+test('formatDurationCeilQuarter: rounds display up to the next 15 min', () => {
+  assert.equal(formatDurationCeilQuarter(0), '0 min');
+  assert.equal(formatDurationCeilQuarter(90), '15 min');
+  assert.equal(formatDurationCeilQuarter(3600), '1 h 00');
+  assert.equal(formatDurationCeilQuarter((432 * 3600) + (9 * 60)), '432 h 15');
+  assert.equal(formatDurationCeilQuarter((432 * 3600) + (9 * 60), true), '432h15');
+});
+
+test('formatDurationForDisplay: rounds to hours above 20h', () => {
+  assert.equal(formatDurationForDisplay((19 * 3600) + (59 * 60)), '20 h 00');
+  assert.equal(formatDurationForDisplay(20 * 3600), '20 h 00');
+  assert.equal(formatDurationForDisplay((20 * 3600) + 60), '21 h');
+  assert.equal(formatDurationForDisplay((432 * 3600) + (9 * 60)), '433 h');
+  assert.equal(formatDurationForDisplay((432 * 3600) + (9 * 60), true), '433h');
 });
 
 test('metricStats: dispersion stats for the chosen metric', () => {

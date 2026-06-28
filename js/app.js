@@ -1,6 +1,7 @@
-import { computeRanking, formatDuration, metricStats } from './compute.js';
+import { computeRanking, formatDurationForDisplay, metricStats } from './compute.js';
 import { buildDistanceMatrix, RoutingError } from './routing.js';
 import { renderCharts } from './charts.js';
+import { buildResultsSvg } from './share-image.js';
 import {
   parsePeopleCsv, peopleToCsv, downloadFile, readFileAsText, cryptoId,
   serializeState, deserializeState, saveToLocalStorage, loadFromLocalStorage,
@@ -38,10 +39,12 @@ const fuelPriceInput = $('#fuel-price');
 const chartView = $('#chart-view');
 const tableView = $('#table-view');
 const copyResultsBtn = $('#copy-results');
-const resultsSection = $('#results-section');
 const placesRecap = $('#places-recap');
 
 let hasResults = false;
+let lastRows = [];
+let lastErrors = [];
+let lastMetric = 'km';
 
 // Persistent cache of OpenRouteService responses (geocoding + legs), survives reloads.
 const orsCache = createOrsCache(loadOrsCacheStore());
@@ -66,6 +69,8 @@ function persist() {
 function invalidateMatrix() {
   state.matrix = null;
   hasResults = false;
+  lastRows = [];
+  lastErrors = [];
   chartView.hidden = true;
   tableView.hidden = true;
   statsPanel.hidden = true;
@@ -120,8 +125,8 @@ function renderPlaces() {
 
     tr.append(
       qtyCell,
-      inputCell(pl, 'codePostal', 'text'),
       inputCell(pl, 'ville', 'text'),
+      inputCell(pl, 'codePostal', 'text'),
       deleteCell(() => { state.places = state.places.filter((x) => x !== pl); renderPlaces(); invalidateMatrix(); }),
     );
     placesBody.appendChild(tr);
@@ -216,9 +221,8 @@ function renderPlacesRecap() {
   if (!places.length) { placesRecap.hidden = true; return; }
   placesRecap.hidden = false;
   const chips = places.map((pl) => {
-    const name = escapeHtml(pl.ville || pl.codePostal);
-    const cp = pl.ville && pl.codePostal ? `<span class="recap-cp">${escapeHtml(pl.codePostal)}</span>` : '';
-    return `<span class="recap-chip">${cp}<span class="recap-name">${name}</span><span class="recap-qty">×${Number(pl.quantite)}</span></span>`;
+    const name = escapeHtml(pl.ville || 'Lieu sans ville');
+    return `<span class="recap-chip"><span class="recap-qty">×${Number(pl.quantite)}</span><span class="recap-name">${name}</span></span>`;
   }).join('');
   placesRecap.innerHTML = `<span class="recap-label">Lieux</span><div class="recap-chips">${chips}</div>`;
 }
@@ -226,6 +230,10 @@ function renderPlacesRecap() {
 function renderResults(rows, errors) {
   resultsBody.innerHTML = '';
   hasResults = rows.length > 0;
+  copyResultsBtn.disabled = !hasResults;
+  lastMetric = $('#sort-by').value;
+  lastRows = hasResults ? rows : [];
+  lastErrors = errors || [];
   if (!hasResults) {
     statsPanel.hidden = true;
     chartView.hidden = true;
@@ -235,16 +243,13 @@ function renderResults(rows, errors) {
     renderPlacesRecap();
     rows.forEach((r) => {
       const tr = document.createElement('tr');
-      if (r.isOutlier) tr.classList.add('outlier');
       tr.innerHTML = `
         <td>${r.rank}</td>
         <td>${escapeHtml(r.person.nom)}</td>
         <td>${r.km.toFixed(0)}</td>
         <td class="mult">×${r.multKm.toFixed(2)}</td>
-        <td>${formatDuration(r.timeSeconds)}</td>
-        <td class="mult">×${r.multTime.toFixed(2)}</td>
-        <td>${r.cost.toFixed(2)}</td>
-        <td class="mult">×${r.multCost.toFixed(2)}</td>`;
+        <td>${formatDurationForDisplay(r.timeSeconds)}</td>
+        <td>${r.cost.toFixed(2)}</td>`;
       resultsBody.appendChild(tr);
     });
     const metric = $('#sort-by').value;
@@ -260,7 +265,7 @@ function renderResults(rows, errors) {
 // Metric → {label, unit, fmt} for the stat cards.
 const STAT_METRIC = {
   km: { label: 'km', unit: 'km', fmt: (v) => v.toFixed(0) },
-  time: { label: 'temps', unit: '', fmt: (v) => formatDuration(v) },
+  time: { label: 'temps', unit: '', fmt: (v) => formatDurationForDisplay(v) },
   cost: { label: 'coût', unit: '€', fmt: (v) => v.toFixed(2) },
 };
 
@@ -271,12 +276,10 @@ function renderStats(stats, metric) {
   const f = (v) => m.fmt(v) + u;
   const minMaxRatio = stats.min > 0 ? stats.max / stats.min : 0;
   const cards = [
-    [`Total (${m.label})`, f(stats.sum)],
-    [`Médiane (${m.label})`, f(stats.median)],
-    [`Min (${m.label})`, f(stats.min)],
-    [`Max (${m.label})`, f(stats.max)],
+    ['Total', f(stats.sum)],
+    ['Médiane', f(stats.median)],
+    ['Min / max', `${f(stats.min)} → ${f(stats.max)}`],
     ['Coef. × min→max', '×' + minMaxRatio.toFixed(2), '×1 = équité parfaite (tout le monde identique)'],
-    ['IQR / médiane', '×' + stats.iqrOverMedian.toFixed(2)],
     ['Gini (inégalité)', stats.gini.toFixed(3), '0 = équité parfaite · 1 = max inégal'],
   ];
   statsPanel.innerHTML = cards.map(([label, value, hint]) => `
@@ -300,6 +303,116 @@ function escapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => (
     { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
   ));
+}
+
+// ---- Copy/download results as image ----
+
+/** Trigger a blob download (fallback when clipboard image write is unavailable). */
+function downloadBlob(filename, blob) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.rel = 'noopener';
+  a.style.display = 'none';
+  document.body.appendChild(a);
+  a.click();
+  window.setTimeout(() => {
+    a.remove();
+    URL.revokeObjectURL(url);
+  }, 30_000);
+}
+
+/** True if the browser can write an image to the clipboard via ClipboardItem. */
+function canWriteImageClipboard(type = 'image/png') {
+  return typeof ClipboardItem !== 'undefined'
+    && (!ClipboardItem.supports || ClipboardItem.supports(type))
+    && navigator.clipboard && typeof navigator.clipboard.write === 'function';
+}
+
+/** Convert the standalone SVG export into a PNG blob for clipboard support. */
+async function svgToPngBlob(svg, width, height) {
+  const svgBlob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
+  const url = URL.createObjectURL(svgBlob);
+  const img = new Image();
+  img.decoding = 'sync';
+  try {
+    await new Promise((resolve, reject) => {
+      img.onload = resolve;
+      img.onerror = () => reject(new Error('Le rendu PNG a échoué.'));
+      img.src = url;
+    });
+
+    const scale = Math.min(window.devicePixelRatio || 1, 2);
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.ceil(width * scale);
+    canvas.height = Math.ceil(height * scale);
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('Canvas indisponible.');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.scale(scale, scale);
+    ctx.drawImage(img, 0, 0, width, height);
+    const png = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+    if (!png) throw new Error('Aucune image PNG générée.');
+    return png;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+async function onCopyResults() {
+  if (!hasResults || !lastRows.length) return;
+  copyResultsBtn.disabled = true;
+  let image;
+  try {
+    image = buildResultsSvg({
+      rows: lastRows,
+      places: state.places,
+      metric: lastMetric,
+      errors: lastErrors,
+      generatedAt: new Date(),
+    });
+  } catch (err) {
+    showStatus('Impossible de générer l\'image : ' + (err?.message || err), true);
+    copyResultsBtn.disabled = !hasResults;
+    return;
+  }
+
+  let pngBlob = null;
+  let pngError = null;
+  try {
+    pngBlob = await svgToPngBlob(image.svg, image.width, image.height);
+  } catch (err) {
+    pngError = err;
+  }
+
+  if (!pngBlob) {
+    downloadBlob('palmares.svg', new Blob([image.svg], { type: 'image/svg+xml;charset=utf-8' }));
+    showStatus('Conversion PNG impossible (' + (pngError?.message || pngError)
+      + ') — image SVG téléchargée (palmares.svg).', true);
+    copyResultsBtn.disabled = !hasResults;
+    return;
+  }
+
+  // Try clipboard write; on any failure, fall back to PNG download.
+  if (canWriteImageClipboard()) {
+    try {
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': pngBlob })]);
+      showStatus('Résultats copiés dans le presse-papier (image).');
+      copyResultsBtn.disabled = !hasResults;
+      return;
+    } catch (err) {
+      downloadBlob('palmares.png', pngBlob);
+      showStatus('Copie dans le presse-papier impossible (' + (err?.message || err)
+        + ') — PNG téléchargé (palmares.png).', true);
+      copyResultsBtn.disabled = !hasResults;
+      return;
+    }
+  }
+  downloadBlob('palmares.png', pngBlob);
+  showStatus('Copie d\'image non supportée par ce navigateur — PNG téléchargé (palmares.png).');
+  copyResultsBtn.disabled = !hasResults;
 }
 
 // ---- Import / Export ----
@@ -375,6 +488,7 @@ function init() {
   $('#import-json').addEventListener('change', (e) => e.target.files[0] && onImportJson(e.target.files[0]));
 
   $('#compute').addEventListener('click', onCompute);
+  copyResultsBtn.addEventListener('click', onCopyResults);
 
   const saved = loadFromLocalStorage();
   if (saved) {

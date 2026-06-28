@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { niceMax, linearScale, ticks, niceTicks } from '../js/charts.js';
+import { niceMax, linearScale, ticks, niceTicks, renderCharts } from '../js/charts.js';
 
 test('niceMax: rounds up to a clean axis maximum (fine steps)', () => {
   assert.equal(niceMax(0), 1);
@@ -34,4 +34,57 @@ test('linearScale: guards a zero-width domain (no division by zero)', () => {
 test('ticks: returns count+1 evenly spaced values from 0 to max', () => {
   assert.deepEqual(ticks(100, 4), [0, 25, 50, 75, 100]);
   assert.deepEqual(ticks(10, 5), [0, 2, 4, 6, 8, 10]);
+});
+
+test('renderCharts: outliers do not get a separate amber legend or color class', () => {
+  const container = { innerHTML: '' };
+  renderCharts(container, [
+    { person: { nom: 'Alice' }, km: 100, timeSeconds: 3600, cost: 12, multKm: 1, multTime: 1, multCost: 1, isOutlier: false },
+    { person: { nom: 'Bob' }, km: 5000, timeSeconds: 7200, cost: 600, multKm: 50, multTime: 2, multCost: 50, isOutlier: true },
+  ], 'km');
+
+  assert.equal(container.innerHTML.includes('barres ambrées'), false);
+  assert.equal(container.innerHTML.includes('bar-outlier'), false);
+  assert.equal(container.innerHTML.includes('dot-outlier'), false);
+});
+
+test('renderCharts: bar labels have a translucent background', () => {
+  const container = { innerHTML: '' };
+  renderCharts(container, [
+    { person: { nom: 'Alice' }, km: 100, timeSeconds: 3600, cost: 12, multKm: 1, multTime: 1, multCost: 1, isOutlier: false },
+  ], 'km');
+
+  assert.ok(container.innerHTML.includes('class="bar-label-bg"'));
+});
+
+test('renderCharts: ranking reference labels include the metric unit', () => {
+  const container = { innerHTML: '' };
+  renderCharts(container, [
+    { person: { nom: 'Alice' }, km: 100, timeSeconds: 3600, cost: 12, multKm: 1, multTime: 1, multCost: 1, isOutlier: false },
+    { person: { nom: 'Bob' }, km: 300, timeSeconds: 7200, cost: 36, multKm: 3, multTime: 2, multCost: 3, isOutlier: false },
+  ], 'km');
+
+  assert.ok(container.innerHTML.includes('médiane 200 km'));
+  assert.ok(container.innerHTML.includes('moyenne 200 km'));
+});
+
+test('renderCharts: bar label shows full trip summary and km multiplier', () => {
+  const container = { innerHTML: '' };
+  renderCharts(container, [
+    {
+      person: { nom: 'Alice' },
+      km: 35630,
+      timeSeconds: (432 * 3600) + (9 * 60),
+      cost: 4276,
+      multKm: 3.51,
+      multTime: 1,
+      multCost: 1,
+      isOutlier: false,
+    },
+  ], 'km');
+
+  assert.ok(container.innerHTML.includes(`${(35630).toLocaleString('fr-FR')}km`));
+  assert.ok(container.innerHTML.includes('class="bar-value-strong">433h</tspan>'));
+  assert.ok(container.innerHTML.includes(`class="bar-value-strong">${(4276).toLocaleString('fr-FR')}€</tspan>`));
+  assert.ok(container.innerHTML.includes('x3.51'));
 });

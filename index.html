@@ -10,6 +10,12 @@
   <header>
     <h1>lightOnDistance</h1>
     <p class="subtitle">Palmarès des kilomètres, du temps et du coût des trajets</p>
+    <p class="intro-text">
+      Cet outil calcule, pour un scénario de réunions donné, les kilomètres, le temps de trajet
+      et les coûts supportés par chaque participant. Il établit ensuite un palmarès des
+      déplacements de chacun, afin de visualiser rapidement comment les contraintes se
+      répartissent dans le groupe et de comparer facilement plusieurs scénarios.
+    </p>
   </header>
 
   <main>
@@ -75,8 +81,8 @@
           <thead>
             <tr>
               <th>Quantité</th>
-              <th>Code postal</th>
               <th>Ville</th>
+              <th>Code postal</th>
               <th></th>
             </tr>
           </thead>
@@ -98,7 +104,7 @@
             <option value="cost">Coût</option>
           </select>
         </label>
-        <button id="copy-results" disabled>Copier les résultats</button>
+        <button id="copy-results" disabled>Copier / télécharger l’image</button>
       </div>
       <div id="places-recap" hidden></div>
       <div id="status" class="status" hidden></div>
@@ -114,9 +120,7 @@
               <th>Km</th>
               <th>×</th>
               <th>Temps</th>
-              <th>×</th>
               <th>Coût (€)</th>
-              <th>×</th>
             </tr>
           </thead>
           <tbody></tbody>
