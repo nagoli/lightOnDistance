@@ -1,8 +1,10 @@
 import { computeRanking, formatDuration } from './compute.js';
 import { buildDistanceMatrix, RoutingError } from './routing.js';
+import { renderCharts } from './charts.js';
 import {
   parsePeopleCsv, peopleToCsv, downloadFile, readFileAsText, cryptoId,
   serializeState, deserializeState, saveToLocalStorage, loadFromLocalStorage,
+  createOrsCache, loadOrsCacheStore, saveOrsCacheStore,
 } from './storage.js';
 
 // ---- State ----
@@ -27,13 +29,21 @@ const $ = (sel) => document.querySelector(sel);
 const peopleBody = $('#people-table tbody');
 const placesBody = $('#places-table tbody');
 const statusEl = $('#status');
-const resultsTable = $('#results-table');
 const resultsBody = $('#results-table tbody');
 const statsPanel = $('#stats-panel');
 const errorsPanel = $('#errors-panel');
 const apiKeyInput = $('#api-key');
 const consumptionInput = $('#consumption');
 const fuelPriceInput = $('#fuel-price');
+const resultsTabs = $('#results-tabs');
+const chartView = $('#chart-view');
+const tableView = $('#table-view');
+
+let activeView = 'chart'; // 'chart' | 'table'
+let hasResults = false;
+
+// Persistent cache of OpenRouteService responses (geocoding + legs), survives reloads.
+const orsCache = createOrsCache(loadOrsCacheStore());
 
 // ---- Persistence ----
 function currentSnapshot() {
@@ -54,7 +64,10 @@ function persist() {
 /** Invalidate cached routing results (called when people/places change). */
 function invalidateMatrix() {
   state.matrix = null;
-  resultsTable.hidden = true;
+  hasResults = false;
+  resultsTabs.hidden = true;
+  chartView.hidden = true;
+  tableView.hidden = true;
   statsPanel.hidden = true;
   errorsPanel.hidden = true;
   hideStatus();
@@ -159,7 +172,8 @@ async function onCompute() {
   try {
     const matrix = await buildDistanceMatrix(apiKey, people, places, (done, total, label) => {
       showStatus(`${label}… (${done}/${total})`);
-    });
+    }, orsCache);
+    saveOrsCacheStore(orsCache.data); // persist reusable ORS responses
 
     state.matrix = matrix; // cache so the session can be reloaded without recomputing
     const { rows, stats, errors } = computeRanking(people, places, matrix, { consumption, fuelPrice }, sortBy);
@@ -167,6 +181,7 @@ async function onCompute() {
     persist();
     hideStatus();
   } catch (err) {
+    saveOrsCacheStore(orsCache.data); // keep whatever was fetched before the failure
     showStatus(formatComputeError(err), true);
   }
 }
@@ -196,11 +211,13 @@ function formatComputeError(err) {
 // ---- Results rendering ----
 function renderResults(rows, stats, errors) {
   resultsBody.innerHTML = '';
-  if (!rows.length) {
-    resultsTable.hidden = true;
+  hasResults = rows.length > 0;
+  if (!hasResults) {
     statsPanel.hidden = true;
+    resultsTabs.hidden = true;
+    chartView.hidden = true;
+    tableView.hidden = true;
   } else {
-    resultsTable.hidden = false;
     rows.forEach((r) => {
       const tr = document.createElement('tr');
       if (r.isOutlier) tr.classList.add('outlier');
@@ -216,8 +233,20 @@ function renderResults(rows, stats, errors) {
       resultsBody.appendChild(tr);
     });
     renderStats(stats);
+    renderCharts(chartView, rows, stats, $('#sort-by').value);
+    resultsTabs.hidden = false;
+    applyView();
   }
   renderErrors(errors);
+}
+
+/** Show the active view (chart or table); a no-op if there are no results. */
+function applyView() {
+  if (!hasResults) return;
+  chartView.hidden = activeView !== 'chart';
+  tableView.hidden = activeView !== 'table';
+  $('#tab-chart').classList.toggle('active', activeView === 'chart');
+  $('#tab-table').classList.toggle('active', activeView === 'table');
 }
 
 function renderStats(stats) {
@@ -287,7 +316,10 @@ function applyState(data) {
   if (state.matrix) {
     recomputeFromCache(); // restore the palmarès without calling the routing service
   } else {
-    resultsTable.hidden = true;
+    hasResults = false;
+    resultsTabs.hidden = true;
+    chartView.hidden = true;
+    tableView.hidden = true;
     statsPanel.hidden = true;
     errorsPanel.hidden = true;
   }
@@ -311,6 +343,11 @@ function init() {
   [consumptionInput, fuelPriceInput].forEach((el) =>
     el.addEventListener('input', () => { persist(); recomputeFromCache(); }));
   $('#sort-by').addEventListener('change', recomputeFromCache);
+
+  resultsTabs.addEventListener('click', (e) => {
+    const view = e.target.closest('.tab')?.dataset.view;
+    if (view) { activeView = view; applyView(); }
+  });
 
   $('#import-csv-btn').addEventListener('click', () => $('#import-csv').click());
   $('#import-csv').addEventListener('change', (e) => e.target.files[0] && onImportCsv(e.target.files[0]));

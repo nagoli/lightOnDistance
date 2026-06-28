@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   messageForStatus, toAddress, RoutingError, geocode, buildDistanceMatrix,
 } from '../js/routing.js';
+import { createOrsCache } from '../js/storage.js';
 
 test('toAddress: builds "code postal ville"', () => {
   assert.equal(toAddress({ codePostal: '75001', ville: 'Paris' }), '75001 Paris');
@@ -64,6 +65,68 @@ test('geocode: HTTP 401 surfaces a RoutingError(auth)', async () => {
       () => geocode('bad', '75001 Paris'),
       (e) => e instanceof RoutingError && e.kind === 'auth' && e.status === 401,
     );
+  });
+});
+
+// ---- caching: avoid re-calling ORS when already done ----
+
+/** A fetch stub that geocodes any address and returns a constant matrix; counts calls. */
+function countingOrsStub() {
+  const calls = { geocode: 0, matrix: 0 };
+  const fetch = async (url, opts) => {
+    if (typeof url === 'string' && url.includes('/geocode/')) {
+      calls.geocode += 1;
+      return { ok: true, status: 200, json: async () => ({ features: [{ geometry: { coordinates: [1, 1] } }] }) };
+    }
+    calls.matrix += 1;
+    // parse body to size the matrix correctly
+    const body = JSON.parse(opts.body);
+    const ns = body.sources.length;
+    const nd = body.destinations.length;
+    const distances = Array.from({ length: ns }, () => Array.from({ length: nd }, () => 1000));
+    const durations = Array.from({ length: ns }, () => Array.from({ length: nd }, () => 60));
+    return { ok: true, status: 200, json: async () => ({ distances, durations }) };
+  };
+  return { fetch, calls };
+}
+
+test('buildDistanceMatrix: uses the cache to skip already-known geocodes and legs', async () => {
+  const { fetch, calls } = countingOrsStub();
+  const cache = createOrsCache({ geo: {}, legs: {} });
+  const people = [{ id: 'a', codePostal: '75001', ville: 'Paris' }];
+  const places = [{ id: 'p1', codePostal: '44000', ville: 'Nantes' }];
+
+  await withFetch(fetch, async () => {
+    const m1 = await buildDistanceMatrix('key', people, places, null, cache);
+    assert.deepEqual(m1.a.p1, { distanceM: 1000, durationS: 60 });
+    const afterFirst = { ...calls };
+    assert.ok(afterFirst.geocode > 0 && afterFirst.matrix > 0);
+
+    // Second run with the same data: cache hit -> no new ORS calls at all.
+    const m2 = await buildDistanceMatrix('key', people, places, null, cache);
+    assert.deepEqual(m2.a.p1, { distanceM: 1000, durationS: 60 });
+    assert.equal(calls.geocode, afterFirst.geocode);
+    assert.equal(calls.matrix, afterFirst.matrix);
+  });
+});
+
+test('buildDistanceMatrix: only fetches the newly added place (incremental cache)', async () => {
+  const { fetch, calls } = countingOrsStub();
+  const cache = createOrsCache({ geo: {}, legs: {} });
+  const people = [{ id: 'a', codePostal: '75001', ville: 'Paris' }];
+  const places = [{ id: 'p1', codePostal: '44000', ville: 'Nantes' }];
+
+  await withFetch(fetch, async () => {
+    await buildDistanceMatrix('key', people, places, null, cache);
+    const before = { ...calls };
+
+    // Add a second place: only it needs geocoding + one matrix request.
+    const places2 = [...places, { id: 'p2', codePostal: '69001', ville: 'Lyon' }];
+    const m = await buildDistanceMatrix('key', people, places2, null, cache);
+    assert.deepEqual(m.a.p1, { distanceM: 1000, durationS: 60 }); // from cache
+    assert.deepEqual(m.a.p2, { distanceM: 1000, durationS: 60 }); // freshly fetched
+    assert.equal(calls.geocode, before.geocode + 1); // only Lyon geocoded
+    assert.equal(calls.matrix, before.matrix + 1);   // one extra matrix request
   });
 });
 

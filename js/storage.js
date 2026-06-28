@@ -59,6 +59,53 @@ export function loadFromLocalStorage() {
   }
 }
 
+// ---- OpenRouteService response cache (persistent, keyed per address / per leg) ----
+
+export const ORS_CACHE_KEY = 'lightOnDistance.orsCache.v1';
+
+/** Stable key for a one-way leg between two address strings. */
+export function legKey(originAddr, destAddr) {
+  return `${originAddr} >> ${destAddr}`;
+}
+
+/**
+ * Wrap a plain store `{ geo: {}, legs: {} }` with a get/set interface.
+ * `geo`  : address -> [lon, lat] | null (null = "geocoded, not found").
+ * `legs` : legKey -> { distanceM, durationS }.
+ */
+export function createOrsCache(store) {
+  const s = store && typeof store === 'object' ? store : {};
+  if (!s.geo || typeof s.geo !== 'object') s.geo = {};
+  if (!s.legs || typeof s.legs !== 'object') s.legs = {};
+  const has = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
+  return {
+    data: s,
+    hasGeo: (addr) => has(s.geo, addr),
+    getGeo: (addr) => (has(s.geo, addr) ? s.geo[addr] : null),
+    setGeo: (addr, coords) => { s.geo[addr] = coords ?? null; },
+    hasLeg: (o, d) => has(s.legs, legKey(o, d)),
+    getLeg: (o, d) => s.legs[legKey(o, d)],
+    setLeg: (o, d, value) => { s.legs[legKey(o, d)] = value; },
+  };
+}
+
+/** Load the cache store from localStorage (empty store if absent/unavailable). */
+export function loadOrsCacheStore() {
+  try {
+    const raw = window.localStorage.getItem(ORS_CACHE_KEY);
+    return raw ? JSON.parse(raw) : { geo: {}, legs: {} };
+  } catch (_) {
+    return { geo: {}, legs: {} };
+  }
+}
+
+/** Persist the cache store to localStorage (no-op if unavailable). */
+export function saveOrsCacheStore(store) {
+  try {
+    window.localStorage.setItem(ORS_CACHE_KEY, JSON.stringify(store));
+  } catch (_) { /* storage disabled / quota — ignore */ }
+}
+
 /** Parse a people CSV. Handles `,` or `;` separators and an optional header. */
 export function parsePeopleCsv(text) {
   const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);

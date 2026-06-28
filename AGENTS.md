@@ -28,10 +28,28 @@ classé avec des indicateurs **×N** et des **statistiques** de dispersion.
   - **Géocodage** `GET /geocode/search` (clé en query `api_key`) → `[lon, lat]` (limité à la France).
   - **Matrice** `POST /v2/matrix/driving-car` (clé dans l'en-tête `Authorization`) →
     `{ distances: [[m]], durations: [[s]] }`.
-- ORS travaille en **coordonnées** : on géocode d'abord chaque adresse (avec cache de
-  déduplication), puis on envoie les coordonnées à la matrice, par **lots** (≤ 50 locations
-  par requête) pour respecter les limites du plan gratuit.
+- ORS travaille en **coordonnées** : on géocode d'abord chaque adresse, puis on envoie les
+  coordonnées à la matrice, par **lots** (≤ 50 locations par requête) pour respecter les
+  limites du plan gratuit.
 - Clé gratuite : https://openrouteservice.org/dev/#/signup
+
+### Cache persistant des réponses ORS (économie d'appels)
+- Objectif : **ne jamais refaire un appel déjà effectué**. Implémenté dans `storage.js`
+  (`createOrsCache`, `loadOrsCacheStore`, `saveOrsCacheStore`, clé `ORS_CACHE_KEY`).
+- Deux dictionnaires persistés en `localStorage` :
+  - `geo`  : adresse → `[lon, lat]` (ou `null` = géocodé mais introuvable, mémorisé pour
+    éviter de réessayer indéfiniment).
+  - `legs` : `legKey(origineAddr, destAddr)` → `{ distanceM, durationS }` (trajet aller simple).
+- `buildDistanceMatrix(apiKey, people, places, onProgress, cache)` :
+  1. géocode **uniquement** les adresses absentes du cache ;
+  2. lit les trajets déjà connus depuis le cache ;
+  3. ne lance une requête matrice que sur la **grille manquante** (personnes×lieux ayant au
+     moins un trajet manquant), puis met le cache à jour.
+- Conséquence : ajouter un lieu/une personne ne recalcule que les **nouveaux** trajets.
+  `app.js` charge le cache au démarrage et le sauvegarde après chaque calcul (y compris en
+  cas d'échec, pour conserver ce qui a déjà été récupéré).
+- En tests, on injecte un cache en mémoire et on **compte les appels `fetch`** pour vérifier
+  qu'aucun appel n'est refait (cf. `tests/routing.test.mjs`).
 
 ## 3. Règles métier (validées avec l'utilisateur)
 
@@ -62,8 +80,9 @@ Pour chaque personne, cumulé sur tous les lieux :
 | `styles.css` | Mise en forme (aucune lib CSS). |
 | `js/compute.js` | **Fonctions pures** : calculs km/temps/coût, pauses, ×N, statistiques. **Aucun accès DOM/réseau.** |
 | `js/routing.js` | Client **OpenRouteService** : géocodage + matrice de distances (`driving-car`, par lots) + gestion d'erreurs (`RoutingError`). |
+| `js/charts.js` | Graphiques **SVG** (zéro dépendance) : barres classées + répartition (box plot + points), avec annotations statistiques. Helpers purs `niceMax`/`linearScale`/`ticks` testés. |
 | `js/storage.js` | (Dé)sérialisation pure, persistance `localStorage`, import/export CSV & JSON. |
-| `js/app.js` | État de l'app, rendu des tableaux éditables, branchement des événements, orchestration. |
+| `js/app.js` | État de l'app, rendu des tableaux éditables, onglets Graphique/Tableau, branchement des événements, orchestration. |
 | `tests/*.test.mjs` | Tests unitaires (`node:test`). |
 
 ### Flux de données
@@ -71,7 +90,20 @@ Pour chaque personne, cumulé sur tous les lieux :
 2. Au clic « Calculer » : `routing.js#buildDistanceMatrix(apiKey, ...)` géocode puis interroge la
    matrice ORS → `matrix[personId][placeId] = {distanceM, durationS} | {error}`.
 3. `compute.js#computeRanking(...)` → `{ rows, stats, errors }` purement à partir de cette matrice.
-4. `app.js` affiche le tableau, les stats et les erreurs.
+4. `app.js#renderResults()` affiche les **statistiques**, les **graphiques** (`charts.js`) et le
+   **tableau**, et les erreurs. Deux onglets basculent entre vue Graphique et vue Tableau
+   (`activeView` / `applyView()`), sans recalcul.
+
+### Visualisation (`js/charts.js`)
+- **Graphique 1 — Classement** : barres horizontales triées selon la métrique active
+  (`sort-by`), avec lignes de **médiane** et **moyenne**, et barres ambrées pour les outliers.
+- **Graphique 2 — Répartition (km)** : box plot (IQR, médiane, moustaches) + bande
+  **moyenne ± écart-type** + points par personne (outliers nommés au-dessus du seuil
+  `Q3 + 1,5·IQR`). Les valeurs stat (médiane, moyenne, écart-type, IQR, seuil) sont
+  affichées en « chips » dans le graphique.
+- Tout est en SVG inline responsive (`viewBox`, `width:100%`), stylé via classes dans `styles.css`.
+- Le graphique de classement suit la métrique de tri ; la répartition reste sur les **km**
+  (métrique de dispersion de référence, cohérente avec `stats`).
 
 ### Gestion des erreurs de connexion / service (important)
 - `routing.js` enveloppe tout échec dans une **`RoutingError`** avec un champ `kind` :

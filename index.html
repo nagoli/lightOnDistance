@@ -101,8 +101,13 @@
       </div>
       <div id="status" class="status" hidden></div>
       <div id="stats-panel" hidden></div>
-      <div class="table-wrap">
-        <table id="results-table" hidden>
+      <div id="results-tabs" class="tabs" role="tablist" hidden>
+        <button class="tab active" id="tab-chart" data-view="chart" role="tab">Graphique</button>
+        <button class="tab" id="tab-table" data-view="table" role="tab">Tableau</button>
+      </div>
+      <div id="chart-view" hidden></div>
+      <div class="table-wrap" id="table-view" hidden>
+        <table id="results-table">
           <thead>
             <tr>
               <th>Rang</th>

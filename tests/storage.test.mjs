@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   parsePeopleCsv, peopleToCsv, serializeState, deserializeState,
-  loadFromLocalStorage, cryptoId,
+  loadFromLocalStorage, cryptoId, createOrsCache, legKey,
 } from '../js/storage.js';
 
 test('parsePeopleCsv: header + comma separator', () => {
@@ -109,4 +109,39 @@ test('cryptoId: returns a non-empty unique string', () => {
   const a = cryptoId();
   const b = cryptoId();
   assert.ok(a && b && a !== b);
+});
+
+test('legKey: stable and direction-sensitive', () => {
+  assert.equal(legKey('A', 'B'), 'A >> B');
+  assert.notEqual(legKey('A', 'B'), legKey('B', 'A'));
+});
+
+test('createOrsCache: stores/reads geocodes (incl. cached null) and legs', () => {
+  const store = { geo: {}, legs: {} };
+  const cache = createOrsCache(store);
+
+  assert.equal(cache.hasGeo('75001 Paris'), false);
+  cache.setGeo('75001 Paris', [2.35, 48.85]);
+  assert.equal(cache.hasGeo('75001 Paris'), true);
+  assert.deepEqual(cache.getGeo('75001 Paris'), [2.35, 48.85]);
+
+  // "geocoded, not found" must be remembered (don't retry forever)
+  cache.setGeo('Nowhere', null);
+  assert.equal(cache.hasGeo('Nowhere'), true);
+  assert.equal(cache.getGeo('Nowhere'), null);
+
+  assert.equal(cache.hasLeg('A', 'B'), false);
+  cache.setLeg('A', 'B', { distanceM: 1000, durationS: 60 });
+  assert.equal(cache.hasLeg('A', 'B'), true);
+  assert.deepEqual(cache.getLeg('A', 'B'), { distanceM: 1000, durationS: 60 });
+
+  // mutations are reflected into the backing store (persisted as-is)
+  assert.deepEqual(store.geo['75001 Paris'], [2.35, 48.85]);
+  assert.deepEqual(store.legs['A >> B'], { distanceM: 1000, durationS: 60 });
+});
+
+test('createOrsCache: tolerates an empty/invalid store', () => {
+  const cache = createOrsCache(undefined);
+  assert.equal(cache.hasGeo('x'), false);
+  assert.deepEqual(cache.data, { geo: {}, legs: {} });
 });

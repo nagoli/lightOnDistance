@@ -91,31 +91,47 @@ function chunk(arr, size) {
   return out;
 }
 
+/** Minimal in-memory cache implementing the same interface as `createOrsCache`. */
+function memoryCache() {
+  const geo = new Map();
+  const legs = new Map();
+  return {
+    hasGeo: (a) => geo.has(a),
+    getGeo: (a) => (geo.has(a) ? geo.get(a) : null),
+    setGeo: (a, c) => geo.set(a, c ?? null),
+    hasLeg: (o, d) => legs.has(`${o} >> ${d}`),
+    getLeg: (o, d) => legs.get(`${o} >> ${d}`),
+    setLeg: (o, d, v) => legs.set(`${o} >> ${d}`, v),
+  };
+}
+
 /**
  * Geocode everyone + every place, then build the one-way matrix
  * matrix[personId][placeId] = {distanceM, durationS} | {error}.
  *
+ * A `cache` (see storage.js#createOrsCache) avoids re-calling OpenRouteService for
+ * addresses already geocoded and legs (origin→destination) already computed.
+ *
  * @param {function} onProgress (done, total, label)
+ * @param {object}   cache      get/set interface (hasGeo/getGeo/setGeo/hasLeg/getLeg/setLeg)
  */
-export async function buildDistanceMatrix(apiKey, people, places, onProgress) {
+export async function buildDistanceMatrix(apiKey, people, places, onProgress, cache = memoryCache()) {
   const matrix = {};
   people.forEach((p) => { matrix[p.id] = {}; });
 
-  // 1) Geocode unique addresses (deduplicated cache).
-  const cache = new Map();
+  // 1) Geocode unique addresses — only those not already in cache.
   const targets = [...people, ...places];
-  const totalGeo = targets.length;
+  targets.forEach((t) => { t._addr = toAddress(t); });
+  const uniqueAddrs = [...new Set(targets.map((t) => t._addr))];
   let geoDone = 0;
-  for (const t of targets) {
-    const addr = toAddress(t);
-    if (!cache.has(addr)) cache.set(addr, await geocode(apiKey, addr));
-    t._coords = cache.get(addr);
+  for (const addr of uniqueAddrs) {
+    if (!cache.hasGeo(addr)) cache.setGeo(addr, await geocode(apiKey, addr));
     geoDone += 1;
-    if (onProgress) onProgress(geoDone, totalGeo, 'Géocodage des adresses');
+    if (onProgress) onProgress(geoDone, uniqueAddrs.length, 'Géocodage des adresses');
   }
+  targets.forEach((t) => { t._coords = cache.getGeo(t._addr); });
 
-  // Mark places that could not be geocoded as errors for everyone.
-  const goodPlaces = places.filter((pl) => pl._coords);
+  // Mark geocoding failures as errors for everyone concerned.
   for (const person of people) {
     for (const pl of places) {
       if (!pl._coords) matrix[person.id][pl.id] = { error: 'GEOCODE_PLACE' };
@@ -125,15 +141,31 @@ export async function buildDistanceMatrix(apiKey, people, places, onProgress) {
     }
   }
   const goodPeople = people.filter((p) => p._coords);
+  const goodPlaces = places.filter((pl) => pl._coords);
 
-  // 2) Matrix requests, chunked to respect ORS limits (<=50 locations / request).
-  const placeChunks = chunk(goodPlaces, 20);
+  // 2) Fill cached legs; collect the people/places still missing at least one leg.
+  const missPeople = new Set();
+  const missPlaces = new Set();
+  for (const person of goodPeople) {
+    for (const place of goodPlaces) {
+      if (cache.hasLeg(person._addr, place._addr)) {
+        matrix[person.id][place.id] = cache.getLeg(person._addr, place._addr);
+      } else {
+        missPeople.add(person);
+        missPlaces.add(place);
+      }
+    }
+  }
+
+  // 3) Matrix requests for the missing grid only, chunked (<=50 locations / request).
+  const placeChunks = chunk([...missPlaces], 20);
+  const peopleList = [...missPeople];
   let matDone = 0;
   const matTotal = placeChunks.reduce((acc, pc) =>
-    acc + chunk(goodPeople, Math.max(1, 50 - pc.length)).length, 0) || 1;
+    acc + chunk(peopleList, Math.max(1, 50 - pc.length)).length, 0) || 1;
 
   for (const placeChunk of placeChunks) {
-    const peopleChunks = chunk(goodPeople, Math.max(1, 50 - placeChunk.length));
+    const peopleChunks = chunk(peopleList, Math.max(1, 50 - placeChunk.length));
     for (const peopleChunk of peopleChunks) {
       const result = await requestMatrix(
         apiKey,
@@ -144,11 +176,11 @@ export async function buildDistanceMatrix(apiKey, people, places, onProgress) {
         placeChunk.forEach((place, j) => {
           const distanceM = result.distances?.[i]?.[j];
           const durationS = result.durations?.[i]?.[j];
-          if (distanceM == null || durationS == null) {
-            matrix[person.id][place.id] = { error: 'NO_ROUTE' };
-          } else {
-            matrix[person.id][place.id] = { distanceM, durationS };
-          }
+          const value = (distanceM == null || durationS == null)
+            ? { error: 'NO_ROUTE' }
+            : { distanceM, durationS };
+          matrix[person.id][place.id] = value;
+          if (!value.error) cache.setLeg(person._addr, place._addr, value);
         });
       });
       matDone += 1;
@@ -156,7 +188,7 @@ export async function buildDistanceMatrix(apiKey, people, places, onProgress) {
     }
   }
 
-  // cleanup temp field
-  targets.forEach((t) => { delete t._coords; });
+  // cleanup temp fields
+  targets.forEach((t) => { delete t._coords; delete t._addr; });
   return matrix;
 }

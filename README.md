@@ -23,11 +23,17 @@ Ou déposez les fichiers tels quels sur n'importe quel hébergement statique.
 3. **Lieux** : tableau pré-rempli, éditable ; chaque lieu a une quantité (défaut 1),
    un code postal et une ville.
 4. **Palmarès** : « Calculer le palmarès » géocode les adresses, interroge
-   OpenRouteService et affiche le classement + les statistiques.
+   OpenRouteService et affiche le classement + les statistiques. Deux onglets permettent
+   de basculer entre la **vue graphique** (barres classées + répartition box plot, avec
+   les stats intégrées) et la **vue tableau**.
 
 Les données sont **sauvegardées automatiquement** dans le navigateur (localStorage),
 y compris les distances déjà calculées : recharger la page restaure le palmarès sans
 rappeler le service de distance.
+
+Un **cache local des réponses OpenRouteService** (géocodages + trajets) est conservé dans
+le navigateur : un trajet déjà calculé n'est **jamais redemandé**. Ajouter un lieu ou une
+personne ne déclenche le calcul que pour les **nouveaux** trajets.
 
 Les boutons **Exporter / Importer la session** produisent un fichier JSON qui contient
 tout (personnes, lieux, config **et matrice des distances**) : le réimporter
@@ -70,6 +76,7 @@ max/médiane. Les personnes au-dessus de `Q3 + 1,5 × IQR` sont surlignées (qui
 - `index.html` — interface (4 sections)
 - `styles.css` — mise en forme
 - `js/compute.js` — calculs & statistiques (fonctions pures)
+- `js/charts.js` — graphiques SVG (classement + répartition) avec stats intégrées
 - `js/routing.js` — client OpenRouteService (géocodage + matrice) + gestion d'erreurs
 - `js/storage.js` — import/export CSV & JSON, persistance localStorage
 - `js/app.js` — état, rendu, orchestration
