@@ -160,6 +160,7 @@ td input.qty { width: 70px; }
 }
 .stat-card .label { font-size: 0.75rem; color: var(--muted); }
 .stat-card .value { font-size: 1.1rem; font-weight: 600; }
+.stat-card .stat-hint { font-size: 0.7rem; color: var(--muted); margin-top: 0.2rem; line-height: 1.2; }
 
 .mult { color: var(--accent); font-weight: 600; }
 tr.outlier { background: var(--highlight); }
@@ -211,6 +212,7 @@ tr.row-error td { color: var(--danger); }
 .bar-outlier { fill: #f59e0b; }
 .bar-name { font-size: 12px; fill: var(--text); }
 .bar-value { font-size: 11px; fill: var(--muted); dominant-baseline: middle; }
+.bar-value-sub { font-size: 10px; fill: var(--muted); }
 .ref-median { stroke: #0f766e; stroke-width: 1.5; stroke-dasharray: 5 3; }
 .ref-mean { stroke: #9333ea; stroke-width: 1.5; stroke-dasharray: 2 3; }
 .ref-label { font-size: 11px; font-weight: 600; fill: #0f766e; }

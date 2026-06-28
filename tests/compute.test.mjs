@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   computeBreakSeconds, computePersonTotals, computeRanking,
-  formatDuration, mean, median, quantile, stdDev, metricStats,
+  formatDuration, mean, median, quantile, stdDev, metricStats, gini,
 } from '../js/compute.js';
 
 const params = { consumption: 6, fuelPrice: 2 };
@@ -128,6 +128,25 @@ test('metricStats: dispersion stats for the chosen metric', () => {
   assert.equal(s.iqr, 200);
   assert.equal(s.outlierThreshold, 800); // 500 + 1.5*200
   assert.equal(s.maxOverMedian, 1.5);
+  assert.equal(s.sum, 1200);
+  assert.equal(s.iqrOverMedian, 0.5); // 200/400
+  assert.ok(Math.abs(s.gini - gini([200, 400, 600])) < 1e-9);
+});
+
+test('gini: 0 for equal or empty distributions', () => {
+  assert.equal(gini([]), 0);
+  assert.equal(gini([5]), 0);
+  assert.equal(gini([100, 100, 100]), 0);
+});
+
+test('gini: increases with inequality', () => {
+  const equal = gini([100, 100, 100, 100]);
+  const mild = gini([50, 100, 150, 200]);
+  const extreme = gini([0, 0, 0, 400]);
+  assert.equal(equal, 0);
+  assert.ok(mild > 0 && mild < 1);
+  assert.ok(extreme > mild);
+  assert.ok(extreme <= 1);
 });
 
 test('metricStats: follows the metric (time)', () => {

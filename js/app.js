@@ -250,18 +250,22 @@ function renderStats(stats, metric) {
   const m = STAT_METRIC[metric] || STAT_METRIC.km;
   const u = m.unit ? ' ' + m.unit : '';
   const f = (v) => m.fmt(v) + u;
+  const minMaxRatio = stats.min > 0 ? stats.max / stats.min : 0;
   const cards = [
-    ['Personnes classées', stats.count],
+    [`Total (${m.label})`, f(stats.sum)],
     [`Médiane (${m.label})`, f(stats.median)],
-    [`Moyenne (${m.label})`, f(stats.mean)],
     [`Min (${m.label})`, f(stats.min)],
     [`Max (${m.label})`, f(stats.max)],
-    [`Écart-type (${m.label})`, f(stats.std)],
-    [`Écart interquartile (${m.label})`, f(stats.iqr)],
-    ['Max / médiane', '×' + stats.maxOverMedian.toFixed(2)],
+    ['Coef. × min→max', '×' + minMaxRatio.toFixed(2), '×1 = équité parfaite (tout le monde identique)'],
+    ['IQR / médiane', '×' + stats.iqrOverMedian.toFixed(2)],
+    ['Gini (inégalité)', stats.gini.toFixed(3), '0 = équité parfaite · 1 = max inégal'],
   ];
-  statsPanel.innerHTML = cards.map(([label, value]) => `
-    <div class="stat-card"><div class="label">${label}</div><div class="value">${value}</div></div>
+  statsPanel.innerHTML = cards.map(([label, value, hint]) => `
+    <div class="stat-card">
+      <div class="label">${label}</div>
+      <div class="value">${value}</div>
+      ${hint ? `<div class="stat-hint">${hint}</div>` : ''}
+    </div>
   `).join('');
 }
 

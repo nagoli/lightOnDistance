@@ -80,6 +80,22 @@ export function stdDev(values) {
 }
 
 /**
+ * Gini coefficient of a distribution (0 = perfectly equal, 1 = maximally unequal).
+ * Uses the sorted-values formula: G = (2·Σ i·x_i)/(n·Σx) − (n+1)/n  (i = 1..n, ascending).
+ * Returns 0 for an empty or all-equal distribution.
+ */
+export function gini(values) {
+  const n = values.length;
+  if (n < 2) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const sum = sorted.reduce((a, b) => a + b, 0);
+  if (sum <= 0) return 0;
+  let weighted = 0;
+  for (let i = 0; i < n; i++) weighted += (i + 1) * sorted[i];
+  return (2 * weighted) / (n * sum) - (n + 1) / n;
+}
+
+/**
  * Build the full ranking from people + places + distance matrix.
  * @returns {{rows:Array, stats:object, errors:Array}}
  */
@@ -154,10 +170,13 @@ export function metricStats(rows, metric = 'km') {
   const med = median(values);
   const iqr = q3 - q1;
   const max = Math.max(...values);
+  const min = Math.min(...values);
+  const sum = values.reduce((a, b) => a + b, 0);
   return {
     count: values.length,
-    min: Math.min(...values),
+    min,
     max,
+    sum,
     median: med,
     mean: mean(values),
     std: stdDev(values),
@@ -166,6 +185,8 @@ export function metricStats(rows, metric = 'km') {
     iqr,
     outlierThreshold: q3 + 1.5 * iqr,
     maxOverMedian: med > 0 ? max / med : 0,
+    iqrOverMedian: med > 0 ? iqr / med : 0,
+    gini: gini(values),
   };
 }
 

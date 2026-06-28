@@ -60,6 +60,20 @@ const METRICS = {
 function fmtNum(v) { return Math.round(v).toLocaleString('fr-FR'); }
 /** Format a stat value for the metric, appending its unit (km/€; time has none). */
 function fmtStat(m, v) { return m.fmt(v) + (m.unit ? ' ' + m.unit : ''); }
+
+/** End-of-bar label, two lines: "1234 km ×1.50" then "12 h 30 · 250.00 €" (×N only on km). */
+function barLabel(r) {
+  const km = METRICS.km;
+  const line1 = `${km.fmt(km.get(r))} km ×${km.mult(r).toFixed(2)}`;
+  const line2 = ['time', 'cost']
+    .map((k) => {
+      const mm = METRICS[k];
+      const u = mm.unit ? ' ' + mm.unit : '';
+      return `${mm.fmt(mm.get(r))}${u}`;
+    })
+    .join(' · ');
+  return { line1, line2 };
+}
 function esc(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => (
     { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
@@ -92,11 +106,11 @@ function rankingChart(rows, metric) {
   const mn = mean(values);
 
   const W = 760;
-  const rowH = 34;
+  const rowH = 40;
   const top = 70;
   const bottom = 26;
   const leftPad = 142;
-  const rightPad = 104;
+  const rightPad = 300;
   const n = rows.length;
   const plotW = W - leftPad - rightPad;
   const H = top + n * rowH + bottom;
@@ -116,11 +130,15 @@ function rankingChart(rows, metric) {
     const y = top + i * rowH + (rowH - 18) / 2;
     const w = Math.max(1, x(v) - leftPad);
     const cls = r.isOutlier ? 'bar bar-outlier' : 'bar';
-    const label = `${m.fmt(v)}${m.unit ? ' ' + m.unit : ''} · ×${m.mult(r).toFixed(2)}`;
+    const { line1, line2 } = barLabel(r);
+    const lx = (x(v) + 8).toFixed(1);
     return `<g>
       <text x="${leftPad - 10}" y="${y + 13}" class="bar-name" text-anchor="end">${i + 1}. ${esc(r.person.nom)}</text>
       <rect x="${leftPad}" y="${y}" width="${w.toFixed(1)}" height="18" rx="4" class="${cls}" />
-      <text x="${(x(v) + 8).toFixed(1)}" y="${y + 13}" class="bar-value">${label}</text>
+      <text x="${lx}" y="${y + 9}" class="bar-value">
+        <tspan x="${lx}" dy="0">${line1}</tspan>
+        <tspan x="${lx}" dy="14" class="bar-value-sub">${line2}</tspan>
+      </text>
     </g>`;
   }).join('');
 
