@@ -4,7 +4,7 @@ import {
   parsePeopleCsv, peopleToCsv, serializeState, deserializeState,
   loadFromLocalStorage, cryptoId, createOrsCache, legKey,
   serializeSessionForExport, encodeSessionPayload, decodeSessionPayload,
-  buildSessionRedirectHtml, countSessionTrips, canExportSessionHtml,
+  buildSessionRedirectUrl, buildSessionRedirectHtml, countSessionTrips, canExportSessionHtml,
   SESSION_EXPORT_TARGET_URL,
 } from '../js/storage.js';
 
@@ -133,9 +133,12 @@ test('session payload encoding is stable and unicode-safe', () => {
 test('buildSessionRedirectHtml: contains the target URL and encoded session', () => {
   const session = serializeSessionForExport({ people: [], places: [] });
   const encoded = encodeSessionPayload(session);
-  const html = buildSessionRedirectHtml(session);
+  const redirectUrl = buildSessionRedirectUrl(encoded, SESSION_EXPORT_TARGET_URL, 12345);
+  const html = buildSessionRedirectHtml(session, SESSION_EXPORT_TARGET_URL, 12345);
+  assert.equal(redirectUrl, `${SESSION_EXPORT_TARGET_URL}?lod_v=12345#session=${encoded}`);
   assert.match(html, /<!DOCTYPE html>/);
   assert.match(html, new RegExp(SESSION_EXPORT_TARGET_URL.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  assert.match(html, /\?lod_v=12345#session=/);
   assert.match(html, new RegExp(encoded));
   assert.match(html, /#session=/);
 });

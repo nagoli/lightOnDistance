@@ -58,11 +58,18 @@ export function decodeSessionPayload(payload) {
   return JSON.parse(new TextDecoder().decode(bytes));
 }
 
-export function buildSessionRedirectHtml(session, targetUrl = SESSION_EXPORT_TARGET_URL) {
-  const encoded = encodeSessionPayload(session);
-  const target = JSON.stringify(targetUrl);
-  const payload = JSON.stringify(encoded);
-  const href = escapeHtmlAttribute(`${targetUrl}#session=${encoded}`);
+export function buildSessionRedirectUrl(encodedSession, targetUrl = SESSION_EXPORT_TARGET_URL, cacheBust = Date.now()) {
+  const url = new URL(targetUrl);
+  if (cacheBust !== '' && cacheBust != null) {
+    url.searchParams.set('lod_v', String(cacheBust));
+  }
+  return `${url.toString()}#session=${encodedSession}`;
+}
+
+export function buildSessionRedirectHtml(session, targetUrl = SESSION_EXPORT_TARGET_URL, cacheBust = Date.now()) {
+  const redirectUrl = buildSessionRedirectUrl(encodeSessionPayload(session), targetUrl, cacheBust);
+  const redirect = JSON.stringify(redirectUrl);
+  const href = escapeHtmlAttribute(redirectUrl);
   return `<!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -74,7 +81,7 @@ export function buildSessionRedirectHtml(session, targetUrl = SESSION_EXPORT_TAR
   <p>Ouverture de la session lightOnDistance...</p>
   <p><a href="${href}">Ouvrir la session</a></p>
   <script>
-    location.replace(${target} + '#session=' + ${payload});
+    location.replace(${redirect});
   </script>
 </body>
 </html>

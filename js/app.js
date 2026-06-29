@@ -481,10 +481,10 @@ function loadSessionFromHash() {
   if (!payload) return null;
   try {
     const data = deserializeState(decodeSessionPayload(payload));
-    window.history.replaceState(null, '', window.location.pathname + window.location.search);
+    window.history.replaceState(null, '', window.location.pathname);
     return data;
   } catch (err) {
-    window.history.replaceState(null, '', window.location.pathname + window.location.search);
+    window.history.replaceState(null, '', window.location.pathname);
     showStatus('Session HTML illisible : utilisez le fichier JSON via Importer la session.', true);
     return null;
   }
