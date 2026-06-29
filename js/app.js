@@ -4,8 +4,10 @@ import { renderCharts } from './charts.js';
 import { buildResultsSvg } from './share-image.js';
 import {
   parsePeopleCsv, peopleToCsv, downloadFile, readFileAsText, cryptoId,
-  serializeState, deserializeState, saveToLocalStorage, loadFromLocalStorage,
+  deserializeState, saveToLocalStorage, loadFromLocalStorage,
   createOrsCache, loadOrsCacheStore, saveOrsCacheStore,
+  serializeSessionForExport, buildSessionRedirectHtml, canExportSessionHtml,
+  countSessionTrips, decodeSessionPayload, HTML_SESSION_MAX_TRIPS,
 } from './storage.js';
 
 // ---- State ----
@@ -36,6 +38,7 @@ const errorsPanel = $('#errors-panel');
 const apiKeyInput = $('#api-key');
 const consumptionInput = $('#consumption');
 const fuelPriceInput = $('#fuel-price');
+const includeApiKeyInput = $('#include-api-key');
 const chartView = $('#chart-view');
 const tableView = $('#table-view');
 const copyResultsBtn = $('#copy-results');
@@ -428,8 +431,18 @@ function onExportCsv() {
 }
 
 function onExportJson() {
-  const data = serializeState(currentSnapshot());
+  const data = serializeSessionForExport(currentSnapshot(), { includeApiKey: includeApiKeyInput.checked });
   downloadFile('lightOnDistance.json', JSON.stringify(data, null, 2), 'application/json');
+}
+
+function onExportHtml() {
+  const data = serializeSessionForExport(currentSnapshot(), { includeApiKey: includeApiKeyInput.checked });
+  const trips = countSessionTrips(data);
+  if (!canExportSessionHtml(data)) {
+    showStatus(`Export HTML limité à ${HTML_SESSION_MAX_TRIPS} trajets : cette session en contient ${trips}. Utilisez l'export JSON.`, true);
+    return;
+  }
+  downloadFile('lightOnDistance.html', buildSessionRedirectHtml(data), 'text/html');
 }
 
 async function onImportJson(file) {
@@ -440,7 +453,7 @@ async function onImportJson(file) {
 
 /** Apply a deserialized state object to inputs + tables, restoring cached results. */
 function applyState(data) {
-  if (data.apiKey) apiKeyInput.value = data.apiKey;
+  apiKeyInput.value = data.apiKey || '';
   if (data.consumption !== '') consumptionInput.value = data.consumption;
   if (data.fuelPrice !== '') fuelPriceInput.value = data.fuelPrice;
   state.people = data.people;
@@ -457,6 +470,23 @@ function applyState(data) {
     statsPanel.hidden = true;
     errorsPanel.hidden = true;
     placesRecap.hidden = true;
+  }
+}
+
+function loadSessionFromHash() {
+  const hash = window.location.hash || '';
+  if (!hash) return null;
+  const params = new URLSearchParams(hash.slice(1));
+  const payload = params.get('session');
+  if (!payload) return null;
+  try {
+    const data = deserializeState(decodeSessionPayload(payload));
+    window.history.replaceState(null, '', window.location.pathname + window.location.search);
+    return data;
+  } catch (err) {
+    window.history.replaceState(null, '', window.location.pathname + window.location.search);
+    showStatus('Session HTML illisible : utilisez le fichier JSON via Importer la session.', true);
+    return null;
   }
 }
 
@@ -484,15 +514,21 @@ function init() {
   $('#export-csv').addEventListener('click', onExportCsv);
 
   $('#export-json').addEventListener('click', onExportJson);
+  $('#export-html').addEventListener('click', onExportHtml);
   $('#import-json-btn').addEventListener('click', () => $('#import-json').click());
   $('#import-json').addEventListener('change', (e) => e.target.files[0] && onImportJson(e.target.files[0]));
 
   $('#compute').addEventListener('click', onCompute);
   copyResultsBtn.addEventListener('click', onCopyResults);
 
-  const saved = loadFromLocalStorage();
+  const shared = loadSessionFromHash();
+  const saved = shared || loadFromLocalStorage();
   if (saved) {
     applyState(saved);
+    if (shared) {
+      persist();
+      showStatus('Session importée depuis le fichier HTML.');
+    }
   } else {
     renderPeople();
     renderPlaces();

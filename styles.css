@@ -94,6 +94,52 @@ input:focus, select:focus { outline: 2px solid var(--accent); border-color: var(
   margin: 0.75rem 0;
 }
 
+.session-panel {
+  margin-top: 1rem;
+}
+
+.session-panel h3,
+.session-panel h4 {
+  margin: 0;
+  color: var(--text);
+}
+
+.session-panel h3 {
+  font-size: 1.15rem;
+}
+
+.session-panel h4 {
+  font-size: 1rem;
+}
+
+.session-export-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  margin-top: 1.25rem;
+}
+
+.session-import {
+  margin-top: 0.8rem;
+}
+
+.session-export {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.export-action {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.export-action .hint {
+  margin: 0;
+}
+
 button {
   font-size: 0.9rem;
   padding: 0.45rem 0.85rem;

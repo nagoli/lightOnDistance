@@ -1,6 +1,8 @@
 // CSV / JSON import-export helpers + localStorage persistence.
 
 export const STORAGE_KEY = 'lightOnDistance.state.v1';
+export const SESSION_EXPORT_TARGET_URL = 'https://respiration-yoga.fr/light-on-distance/';
+export const HTML_SESSION_MAX_TRIPS = 1000;
 
 /** Build a plain serializable object from the app state (pure).
  *  Includes the cached OpenRouteService distance matrix so a session can be
@@ -18,6 +20,65 @@ export function serializeState(state) {
     })),
     matrix: (state.matrix && typeof state.matrix === 'object') ? state.matrix : null,
   };
+}
+
+/** Build an exportable session, optionally including the sensitive ORS API key. */
+export function serializeSessionForExport(state, { includeApiKey = false } = {}) {
+  const session = serializeState(state);
+  if (!includeApiKey) session.apiKey = '';
+  return session;
+}
+
+/** Count the person/place grid size represented by a session. */
+export function countSessionTrips(state) {
+  const people = Array.isArray(state?.people) ? state.people.length : 0;
+  const places = Array.isArray(state?.places) ? state.places.length : 0;
+  return people * places;
+}
+
+export function canExportSessionHtml(state, maxTrips = HTML_SESSION_MAX_TRIPS) {
+  return countSessionTrips(state) <= maxTrips;
+}
+
+export function encodeSessionPayload(session) {
+  const json = JSON.stringify(session);
+  const bytes = new TextEncoder().encode(json);
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    binary += String.fromCharCode(...bytes.slice(i, i + 0x8000));
+  }
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+}
+
+export function decodeSessionPayload(payload) {
+  const normalized = String(payload || '').replace(/-/g, '+').replace(/_/g, '/');
+  const padded = normalized + '='.repeat((4 - (normalized.length % 4)) % 4);
+  const binary = atob(padded);
+  const bytes = Uint8Array.from(binary, (ch) => ch.charCodeAt(0));
+  return JSON.parse(new TextDecoder().decode(bytes));
+}
+
+export function buildSessionRedirectHtml(session, targetUrl = SESSION_EXPORT_TARGET_URL) {
+  const encoded = encodeSessionPayload(session);
+  const target = JSON.stringify(targetUrl);
+  const payload = JSON.stringify(encoded);
+  const href = escapeHtmlAttribute(`${targetUrl}#session=${encoded}`);
+  return `<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>lightOnDistance — Ouverture de session</title>
+</head>
+<body>
+  <p>Ouverture de la session lightOnDistance...</p>
+  <p><a href="${href}">Ouvrir la session</a></p>
+  <script>
+    location.replace(${target} + '#session=' + ${payload});
+  </script>
+</body>
+</html>
+`;
 }
 
 /** Normalize a parsed object back into a usable state (pure, tolerant). */
@@ -160,6 +221,12 @@ export function peopleToCsv(people) {
 function csvCell(value) {
   const s = String(value ?? '');
   return /[",;\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+
+function escapeHtmlAttribute(value) {
+  return String(value ?? '').replace(/[&<>"']/g, (c) => (
+    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+  ));
 }
 
 /** Trigger a browser download of a text file. */

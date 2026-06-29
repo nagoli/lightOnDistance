@@ -36,13 +36,31 @@
           <input type="number" id="fuel-price" value="2" min="0" step="0.01" />
         </label>
       </div>
-      <p class="hint">La clé API reste dans votre navigateur ; elle n'est utilisée que pour appeler OpenRouteService (géocodage + calcul des distances). Clé gratuite : <a href="https://openrouteservice.org/dev/#/signup" target="_blank" rel="noopener">openrouteservice.org</a>.</p>
-      <div class="toolbar">
-        <button id="export-json">Exporter la session</button>
-        <button id="import-json-btn">Importer la session</button>
-        <input type="file" id="import-json" accept=".json,application/json" hidden />
+      <p class="hint">La clé API reste dans votre navigateur ; elle n'est utilisée que pour appeler OpenRouteService (géocodage + calcul des distances en voiture).<br> Clé disponible sur <a href="https://openrouteservice.org/dev/#/signup" target="_blank" rel="noopener">openrouteservice.org</a>.</p>
+      <div class="session-panel">
+        <h3>Import de session</h3>
+        <div class="session-import">
+          <button id="import-json-btn">Importer un JSON</button>
+          <input type="file" id="import-json" accept=".json,application/json" hidden />
+        </div>
+        <div class="session-export">
+          <div class="session-export-header">
+            <h3>Export de session</h3>
+            <label class="inline">
+              <input type="checkbox" id="include-api-key" />
+              Inclure la clé OpenRouteService
+            </label>
+          </div>
+          <div class="export-action">
+            <button id="export-json">Exporter en JSON</button>
+            <p class="hint">À ouvrir avec le bouton Importer un JSON.</p>
+          </div>
+          <div class="export-action">
+            <button id="export-html">Exporter en HTML</button>
+            <p class="hint">À ouvrir directement, limité à 1000 trajets.</p>
+          </div>
+        </div>
       </div>
-      <p class="hint">La session inclut les distances déjà calculées : la réimporter recharge le palmarès <strong>sans rappeler OpenRouteService</strong>.</p>
     </section>
 
     <!-- 2. Personnes -->

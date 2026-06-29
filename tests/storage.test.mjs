@@ -3,6 +3,9 @@ import assert from 'node:assert/strict';
 import {
   parsePeopleCsv, peopleToCsv, serializeState, deserializeState,
   loadFromLocalStorage, cryptoId, createOrsCache, legKey,
+  serializeSessionForExport, encodeSessionPayload, decodeSessionPayload,
+  buildSessionRedirectHtml, countSessionTrips, canExportSessionHtml,
+  SESSION_EXPORT_TARGET_URL,
 } from '../js/storage.js';
 
 test('parsePeopleCsv: header + comma separator', () => {
@@ -93,6 +96,59 @@ test('serialize/deserialize preserves the cached distance matrix (session reload
   assert.deepEqual(out.matrix, matrix);
   const round = deserializeState(out);
   assert.deepEqual(round.matrix, matrix);
+});
+
+test('serializeSessionForExport: excludes the ORS key by default', () => {
+  const out = serializeSessionForExport({
+    apiKey: 'secret-key',
+    consumption: '6',
+    fuelPrice: '2',
+    people: [{ id: 'a', nom: 'A' }],
+    places: [{ id: 'p', ville: 'Mélionnec' }],
+  });
+  assert.equal(out.apiKey, '');
+});
+
+test('serializeSessionForExport: includes the ORS key when requested', () => {
+  const out = serializeSessionForExport({
+    apiKey: 'secret-key',
+    people: [],
+    places: [],
+  }, { includeApiKey: true });
+  assert.equal(out.apiKey, 'secret-key');
+});
+
+test('session payload encoding is stable and unicode-safe', () => {
+  const session = {
+    apiKey: '',
+    people: [{ id: 'a', nom: 'Élodie', codePostal: '75001', ville: 'Paris' }],
+    places: [{ id: 'p', quantite: 1, codePostal: '56480', ville: 'Mélionnec' }],
+    matrix: { a: { p: { distanceM: 12345, durationS: 678 } } },
+  };
+  const encoded = encodeSessionPayload(session);
+  assert.match(encoded, /^[A-Za-z0-9_-]+$/);
+  assert.deepEqual(decodeSessionPayload(encoded), session);
+});
+
+test('buildSessionRedirectHtml: contains the target URL and encoded session', () => {
+  const session = serializeSessionForExport({ people: [], places: [] });
+  const encoded = encodeSessionPayload(session);
+  const html = buildSessionRedirectHtml(session);
+  assert.match(html, /<!DOCTYPE html>/);
+  assert.match(html, new RegExp(SESSION_EXPORT_TARGET_URL.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  assert.match(html, new RegExp(encoded));
+  assert.match(html, /#session=/);
+});
+
+test('HTML session export limit: 1000 trips accepted, 1001 refused', () => {
+  const people = Array.from({ length: 100 }, (_, i) => ({ id: `p${i}`, nom: `P${i}` }));
+  const tenPlaces = Array.from({ length: 10 }, (_, i) => ({ id: `l${i}`, ville: `L${i}` }));
+  const elevenPlaces = Array.from({ length: 11 }, (_, i) => ({ id: `l${i}`, ville: `L${i}` }));
+
+  assert.equal(countSessionTrips({ people, places: tenPlaces }), 1000);
+  assert.equal(countSessionTrips({ people, places: elevenPlaces }), 1100);
+  assert.equal(canExportSessionHtml({ people, places: tenPlaces }), true);
+  assert.equal(canExportSessionHtml({ people, places: elevenPlaces }), false);
 });
 
 test('deserializeState: matrix defaults to null when absent or invalid', () => {
